@@ -56,9 +56,9 @@ if View == "Extracción de Características":
     #st.write(f"**Variable seleccionada:** {Variable_Cat}")
 
     # FILA 1 — Barras Y Pastel
-    ContA, ContB = st.columns(2)
+    Contenedor_A, Contenedor_B = st.columns(2)
 
-    with ContA:
+    with Contenedor_A:
         st.subheader("Distribución por categoría (Bar Plot)")
         fig_bar = px.bar(
             Tabla_frecuencias,
@@ -71,7 +71,7 @@ if View == "Extracción de Características":
         fig_bar.update_layout(height=400)
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    with ContB:
+    with Contenedor_B:
         st.subheader("Proporción por categoría (Pie Chart)")
         fig_pie = px.pie(
             Tabla_frecuencias,
@@ -83,9 +83,9 @@ if View == "Extracción de Características":
         st.plotly_chart(fig_pie, use_container_width=True)
 
     # FILA 2 — Dona Y Área
-    ContC, ContD = st.columns(2)
+    Contenedor_C, Contenedor_D = st.columns(2)
 
-    with ContC:
+    with Contenedor_C:
         st.subheader("Visualización tipo dona")
         fig_donut = px.pie(
             Tabla_frecuencias,
@@ -97,7 +97,7 @@ if View == "Extracción de Características":
         )
         st.plotly_chart(fig_donut, use_container_width=True)
 
-    with ContD:
+    with Contenedor_D:
         st.subheader("Tendencia acumulada (Área)")
         fig_area = px.area(
             Tabla_frecuencias.sort_values(by='frecuencia', ascending=False),
@@ -141,10 +141,4 @@ if View == "Extracción de Características":
     st.subheader("Tabla de frecuencias")
     st.dataframe(Tabla_frecuencias.style.background_gradient(cmap='Blues'))
  ############################################################################
-
-
-
-
-
-
 
