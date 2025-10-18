@@ -138,9 +138,11 @@ if View == "Extracción de Características":
 
     # Tabla de frecuencias
     st.markdown("---")
-    st.subheader("📋 Tabla de frecuencias")
+    st.subheader("Tabla de frecuencias")
     st.dataframe(Tabla_frecuencias.style.background_gradient(cmap='Blues'))
  ############################################################################
+
+
 
 
 
