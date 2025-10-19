@@ -180,9 +180,8 @@ if View == "Regresión Lineal":
         "Variable": [Variable_x],
         "Coeficiente": [model.coef_[0]],
         "Intercepto": [model.intercept_],
-        "R^2": [r2],
         "R: ": [coef_Correl_simple],
-        "My R^2: ": [coef_Deter_simple]
+        "R^2: ": [coef_Deter_simple]
     })
 
     st.dataframe(coef_df_simple, use_container_width=True)
@@ -226,7 +225,7 @@ if View == "Regresión Lineal":
         coef_Deter_multiple= Model_M.score(X=X_M, y= y_M)
         #Corroboramos cual es el coeficiente de Correlación de nuestro modelo
         coef_Correl_multiple = np.sqrt(coef_Deter_multiple)
-        r2M = r2_score(y_M, y_pred_M)
+        #r2M = r2_score(y_M, y_pred_M)
         n, p = X_M.shape
 
         # Coeficientes
@@ -236,29 +235,13 @@ if View == "Regresión Lineal":
         })
         st.dataframe(coef_tab, use_container_width=True)
 
-        met_tab = pd.DataFrame({"R^2":[r2M], 'My R^2': [coef_Deter_multiple], 'R ': [coef_Correl_multiple]})
+        met_tab = pd.DataFrame({'R^2': [coef_Deter_multiple], 'R ': [coef_Correl_multiple]})
         st.dataframe(met_tab, use_container_width=True)
 
-        # Gráfica: Real vs Predicho #
-        fig_pred = go.Figure()
-
-        # Puntos azules = valores reales (Y_real vs Y_real)
-        fig_pred.add_trace(go.Scatter(x= y_M, y= y_M, mode= 'markers', name= 'Y real vs Y real', marker=dict(color="blue", size=6, opacity=0.6)))
-
-        # Puntos rojos = valores predichos (Y_real vs Y_pred)
-        fig_pred.add_trace(go.Scatter( x=y_M, y=y_pred_M, mode="markers", name="Y pred vs Y pred", marker=dict(color="red", size=6, opacity=0.6, symbol="circle-open")))
-
-        # Línea ideal y = x's (Referencia de una predicción perfecta)
-        fig_pred.add_trace(go.Scatter(x=[y_M.min(), y_M.max()], y=[y_M.min(), y_M.max()], mode="lines", name="Línea ideal", line=dict(color="gray", dash="dot")))
-
-        fig_pred.update_layout(title = 'Comparación: Y real vs Y predicciones', xaxis_title = 'Y real', yaxis_title= 'Y predicciones',legend=dict(title="Leyenda", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),plot_bgcolor="rgba(0,0,0,0)" )
-
-        st.plotly_chart(fig_pred, use_container_width= True)
-
         # Gráfica: Real vs Predicho 
-        fig_pred1 = px.scatter(x=y_M, y=y_pred_M, labels={"x":"Y real ", "y": "Y predicciones"}, title="Comparación Real vs Predicho") 
-        fig_pred1.add_trace(go.Scatter(x=[y_M.min(), y_M.max()], y=[y_M.min(), y_M.max()], mode="lines", name="Línea ideal", line=dict(dash="dot"))) 
-        st.plotly_chart(fig_pred1, use_container_width=True)
+        fig_pred = px.scatter(x=y_M, y=y_pred_M, labels={"x":"Y real ", "y": "Y predicciones"}, title="Comparación Y Real vs Y Predicciones") 
+        fig_pred.add_trace(go.Scatter(x=[y_M.min(), y_M.max()], y=[y_M.min(), y_M.max()], mode="lines", name="Línea ideal", line=dict(dash="dot"))) 
+        st.plotly_chart(fig_pred, use_container_width=True)
 
         # Mensaje
     else:
