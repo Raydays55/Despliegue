@@ -50,6 +50,7 @@ st.sidebar.title('Berlín, Alemania')
 # Menú desplegable de opciones de las páginas seleccionadas
 View = st.sidebar.selectbox(label= 'Tipo de análisis', options= ['Extracción de Características', 'Regresión Lineal', 'Regresión No Lineal', 'Regresión Logística'])
 
+##########################################################################################
 # CONTENIDO DE LA VISTA 1
 if View == "Extracción de Características":
 
@@ -146,9 +147,8 @@ if View == "Extracción de Características":
     st.markdown("---")
     st.subheader("Tabla de frecuencias")
     st.dataframe(Tabla_frecuencias.style.background_gradient(cmap='Blues'))
- ############################################################################
 
-
+ ##########################################################################################
   # Contenido Vista 2
 if View == "Regresión Lineal":
     st.title("Regresión Lineal")
@@ -175,7 +175,7 @@ if View == "Regresión Lineal":
     # Métricas
     r2 = r2_score(y, y_pred)
     coef_Deter_simple = model.score(X= X, y= y)
-    coef_Correl_simple = np.sqrt(coef_Deter_simple)
+    coef_Correl_simple = np.sqrt(abs(coef_Deter_simple))
 
     # Coeficientes
     coef_df_simple = pd.DataFrame({
@@ -226,7 +226,7 @@ if View == "Regresión Lineal":
         #Corroboramos cual es el coeficiente de Determinación de nuestro modelo
         coef_Deter_multiple= Model_M.score(X=X_M, y= y_M)
         #Corroboramos cual es el coeficiente de Correlación de nuestro modelo
-        coef_Correl_multiple = np.sqrt(coef_Deter_multiple)
+        coef_Correl_multiple = np.sqrt(abs(coef_Deter_multiple))
         #r2M = r2_score(y_M, y_pred_M)
         n, p = X_M.shape
 
@@ -249,127 +249,133 @@ if View == "Regresión Lineal":
     else:
         st.info("Selecciona al menos 1 variable para el modelo múltiple.")
 
-# Contenido Vista 3
-from sklearn.preprocessing import PolynomialFeatures
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score, mean_squared_error
 
+##########################################################################################
+# Contenido Vista 3
 if View == "Regresión No Lineal":
     st.title("Regresión No Lineal")
 
+    # Variables numéricas
     numeric_df = df.select_dtypes(include=['float','int']).copy()
     Lista_num = list(numeric_df.columns)
 
     colL, colR = st.columns(2)
     with colL:
-        Variable_y = st.selectbox("Variable dependiente (Y)", options=Lista_num, key="rnl_y")
+        Variable_y = st.selectbox("Variable objetivo (Y)", options=Lista_num, key="rnl_y_cf")
     with colR:
-        Variable_x = st.selectbox("Variable independiente (X)", options=[c for c in Lista_num if c != Variable_y], key="rnl_x")
+        Variable_x = st.selectbox("Variable independiente (X)", options=[c for c in Lista_num if c != Variable_y], key="rnl_x_cf")
 
-    modelos = ["Cuadrática (grado 2)", "Cúbica (grado 3)", "Exponencial: y= a*np.exp(-b*x) + c", "Potencia: y= a*x**b"]
-    Modelo = st.selectbox("Elige modelo no lineal", options=modelos)
+    # Modelos disponibles
+    modelos = ["Función cuadrática (a*x**2 + b*x + c)", "Función exponencial (a*np.exp(-b*x)+c)", "Función potencia (a*x**b)", "Función cúbica (a*x**3 + b*x**2 + c*x + d)"]
+    Modelo = st.selectbox("Elige modelo no lineal", options=modelos, key="rnl_modelo_cf")
 
-    x = numeric_df[[Variable_x]].values
-    y = numeric_df[Variable_y].values
-
-    # Para dibujar curva suave, ordenamos X
-    sort_idx = np.argsort(x[:,0])
+    # Datos
+    x = numeric_df[Variable_x].to_numpy(dtype=float)
+    y = numeric_df[Variable_y].to_numpy(dtype=float)
+    sort_idx = np.argsort(x)
     x_sorted = x[sort_idx]
-    y_sorted = y[sort_idx]
 
-    if "Cuadrática" in Modelo:
-        poly = PolynomialFeatures(degree=2, include_bias=False)
-        X_poly = poly.fit_transform(x)
-        reg = LinearRegression().fit(X_poly, y)
-        y_pred = reg.predict(X_poly)
+    # Definiciones de funciones
+    def func_cuad(x, a, b, c):
+        return a*x**2 + b*x + c
 
-        # Parametros: Intercepto + coef grado1 + coef grado2
-        coef_names = ["Intercepto"] + [f"{Variable_x}", f"{Variable_x}^2"]
-        coefs = [reg.intercept_, reg.coef_[0], reg.coef_[1]]
-        coef_df = pd.DataFrame({"Término":coef_names, "Coeficiente":coefs})
+    def func_cub(x, a, b, c, d):
+        return a*x**3 + b*x**2 + c*x + d
 
-        # Curva suavizada
-        X_poly_sorted = poly.transform(x_sorted)
-        y_line = reg.predict(X_poly_sorted)
+    def func_exp(x, a, b, c):
+        # a*exp(bx)+c
+        return a * np.exp(-b * x) + c
 
-    elif "Cúbica" in Modelo:
-        poly = PolynomialFeatures(degree=3, include_bias=False)
-        X_poly = poly.fit_transform(x)
-        reg = LinearRegression().fit(X_poly, y)
-        y_pred = reg.predict(X_poly)
+    def func_pow(x, a, b):
+        # a*x^b
+        return a * np.power(x, b)
 
-        coef_names = ["Intercepto"] + [f"{Variable_x}", f"{Variable_x}^2", f"{Variable_x}^3"]
-        coefs = [reg.intercept_, reg.coef_[0], reg.coef_[1], reg.coef_[2]]
-        coef_df = pd.DataFrame({"Término":coef_names, "Coeficiente":coefs})
+    # Estimaciones iniciales p0 (robustas por defecto)
+    # Se ajustan por modelo y por escala de los datos
+    x_rng = np.ptp(x) if np.ptp(x) != 0 else 1.0
+    y_rng = np.ptp(y) if np.ptp(y) != 0 else 1.0
+    y_mean = np.nanmean(y)
 
-        X_poly_sorted = poly.transform(x_sorted)
-        y_line = reg.predict(X_poly_sorted)
+    try:
+        if Modelo == "Función cuadrática (a*x**2 + b*x + c)":
+            pars, cov = curve_fit(func_cuad, x, y, maxfev=20000) # maxfev evita errores por iteraciones insuficientes
+            y_pred = func_cuad(x, *pars)
+            y_line = func_cuad(x_sorted, *pars)
+            params_df = pd.DataFrame({"Parámetro": ["a", "b", "c"], "Valor": pars})
 
-    elif "Exponencial" in Modelo:
-        # y = a*exp(bx) -> ln(y) = ln(a) + b*x
-        # Filtrar y>0
-        mask = y > 0
-        x_pos = x[mask]
-        y_pos = y[mask]
-        if len(y_pos) < 3:
-            st.error("Para el modelo exponencial se requieren valores y>0 suficientes.")
+        elif Modelo == "Función cúbica (a*x**3 + b*x**2 + c*x + d)":
+            pars, cov = curve_fit(func_cub, x, y, maxfev=30000)
+            y_pred = func_cub(x, *pars)
+            y_line = func_cub(x_sorted, *pars)
+            params_df = pd.DataFrame({"Parámetro": ["a", "b", "c", "d"], "Valor": pars})
+
+        elif Modelo == "Función exponencial (a*np.exp(-b*x)+c)":
+            # Requiere y “razonables”. Filtramos si y es muy pequeña o negativa para evitar desbordes.
+            mask = np.isfinite(y)
+            if np.sum(mask) < 3:
+                st.error("No hay suficientes datos válidos para ajustar el modelo exponencial.")
+                st.stop()
+            a0 = max(y) - min(y)
+            b0 = 0.01 / x_rng
+            c0 = min(y)
+            pars, cov = curve_fit(func_exp, x, y, maxfev=30000)
+            y_pred = func_exp(x, *pars)
+            y_line = func_exp(x_sorted, *pars)
+            params_df = pd.DataFrame({"Parámetro": ["a", "b", "c"], "Valor": pars})
+
+        elif Modelo == "Función potencia (a*x**b)":
+            # Requiere x>0 y y>0
+            mask = (x > 0) & (y > 0) & np.isfinite(x) & np.isfinite(y)
+            if mask.sum() < 3:
+                st.error("Para la función potencia se requieren suficientes valores con x>0 e y>0.")
+                st.stop()
+            x_pos, y_pos = x[mask], y[mask]
+            b0 = 1.0
+            a0 = np.exp(np.mean(np.log(y_pos) - b0*np.log(x_pos)))
+            pars, cov = curve_fit(func_pow, x_pos, y_pos, maxfev=20000)
+            # Predicciones en todo el rango (para evitar potencias de x<=0, usamos clip pequeño)
+            x_safe = np.clip(x, 1e-12, None)
+            x_sorted_safe = np.clip(x_sorted, 1e-12, None)
+            y_pred = func_pow(x_safe, *pars)
+            y_line = func_pow(x_sorted_safe, *pars)
+            params_df = pd.DataFrame({"Parámetro": ["a", "b"], "Valor": pars})
+
+        else:
+            st.warning("Selecciona un modelo válido.")
             st.stop()
-        Y = np.log(y_pos)
-        reg = LinearRegression().fit(x_pos, Y)
-        b = reg.coef_[0]
-        ln_a = reg.intercept_
-        a = np.exp(ln_a)
-        y_pred = np.exp(reg.predict(x))  # predicciones en escala original
 
-        coef_df = pd.DataFrame({"Parámetro":["a","b"], "Valor":[a,b]})
+        # Métricas
+        r2 = r2_score(y, y_pred)
+        r = np.sqrt(abs(r2))
 
-        y_line = a * np.exp(b * x_sorted)
+        # ---- Salidas
+        st.markdown("**Parámetros estimados (curve_fit):**")
+        st.dataframe(params_df, use_container_width=True)
 
-    elif "Potencia" in Modelo:
-        # y = a*x^b -> ln(y) = ln(a) + b*ln(x)
-        # Requiere x>0, y>0
-        mask = (x[:,0] > 0) & (y > 0)
-        x_pos = x[mask]
-        y_pos = y[mask]
-        if len(y_pos) < 3:
-            st.error("Para el modelo potencia se requieren x>0 e y>0 suficientes.")
-            st.stop()
-        X = np.log(x_pos)
-        Y = np.log(y_pos)
-        reg = LinearRegression().fit(X, Y)
-        b = reg.coef_[0]
-        ln_a = reg.intercept_
-        a = np.exp(ln_a)
-        # Predicciones
-        y_pred = a * (np.maximum(x, 1e-12)**b).ravel()
+        st.markdown("**Métricas del ajuste:**")
+        st.dataframe(pd.DataFrame({"R^2":[r2], "R ":[r]}), use_container_width=True)
 
-        coef_df = pd.DataFrame({"Parámetro":["a","b"], "Valor":[a,b]})
+        # Gráfica: dispersión + curva predicha (ordenada por X)
+        fig = px.scatter(x=x, y=y, labels={"x": Variable_x, "y": Variable_y},
+                         opacity=0.6, title=f"{Modelo} — Dispersión y curva ajustada (curve_fit)")
+        fig.add_trace(go.Scatter(x=x_sorted, y=y_line, mode="lines", name="Ŷ (curva)", line=dict(width=2)))
+        st.plotly_chart(fig, use_container_width=True)
 
-        y_line = a * (np.maximum(x_sorted, 1e-12)**b).ravel()
+        # Residuos
+        resid = y - y_pred
+        fig_resid = px.scatter(x=y_pred, y=resid, labels={"x":"Ŷ", "y":"Residual"},
+                               title="Residuos vs Predicción")
+        fig_resid.add_hline(y=0, line_dash="dot")
+        st.plotly_chart(fig_resid, use_container_width=True)
 
-    # Métricas en datos usados para ajuste (OOS lo puedes añadir con split si deseas)
-    R_squared = r2_score(y, y_pred)
-    R = np.sqrt(abs(R_squared))
+    except RuntimeError as e:
+        st.error(f"No convergió el ajuste: {e}. Prueba con otra X/Y o revisa outliers.")
+    except Exception as e:
+        st.error(f"Error durante el ajuste: {e}")
 
-    st.markdown("**Coeficientes/Parámetros del modelo:**")
-    st.dataframe(coef_df, use_container_width=True)
 
-    met_df = pd.DataFrame({"R^2":[R_squared], "R ": [R]})
-    st.dataframe(met_df, use_container_width=True)
 
-    # Gráfica: dispersión + curva predicha
-    fig_nl = px.scatter(x=x.ravel(), y=y, labels={"x":Variable_x, "y":Variable_y},
-                        opacity=0.6, title=f"{Modelo} — Dispersión y curva ajustada")
-    fig_nl.add_trace(go.Scatter(x=x_sorted.ravel(), y=y_line, mode="lines", name="Ŷ (curva)"))
-    st.plotly_chart(fig_nl, use_container_width=True)
-
-    # Residuales
-    resid = y - y_pred
-    fig_resid = px.scatter(x=y_pred, y=resid, labels={"x":"Ŷ", "y":"Residual"},
-                           title="Residuos vs Predicción")
-    fig_resid.add_hline(y=0, line_dash="dot")
-    st.plotly_chart(fig_resid, use_container_width=True)
-
+##########################################################################################
 # Contenido Vista 4
 if View == "Regresión Logística":
     st.title("Regresión Logística (binaria)")
@@ -382,7 +388,7 @@ if View == "Regresión Logística":
             bin_cols.append(c)
 
     if len(bin_cols) == 0:
-        st.error("No se detectaron columnas binarias en el dataset. Crea una (p.ej. price_cat binaria, host_is_superhost, instant_bookable).")
+        st.error("No se detectaron columnas binarias en el dataset.")
         st.stop()
 
     # 2) Mapeo automático a 0/1 si es object
