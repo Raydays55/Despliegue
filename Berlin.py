@@ -193,13 +193,13 @@ if View == "Regresión Lineal":
     order_idx = np.argsort(X[:, 0])
     fig_scat.add_trace(go.Scatter(
         x=X[order_idx, 0], y=y_pred[order_idx],
-        mode="lines", name="Predicción (Ŷ)"
+        mode="lines", name="Predicción de Y"
     ))
     st.plotly_chart(fig_scat, use_container_width=True)
 
     # Residuales
     resid = y - y_pred
-    fig_res = px.scatter(x=y_pred, y=resid, labels={"x":"Ŷ", "y":"Residual"},
+    fig_res = px.scatter(x=y_pred, y=resid, labels={"x":"Variable Independiente", "y":"Residual"},
                          title="Residuos vs Predicción (diagnóstico)")
     fig_res.add_hline(y=0, line_dash="dot")
     st.plotly_chart(fig_res, use_container_width=True)
@@ -239,19 +239,31 @@ if View == "Regresión Lineal":
         met_tab = pd.DataFrame({"R^2":[r2M], 'My R^2': [coef_Deter_multiple], 'R ': [coef_Correl_multiple]})
         st.dataframe(met_tab, use_container_width=True)
 
-        # Gráfica: Real vs Predicho
-        fig_pred = px.scatter(x=y_M, y=y_pred_M, labels={"x":"Y real", "y":"Ŷ predicho"},
-                              title="Comparación Real vs Predicho")
-        fig_pred.add_trace(go.Scatter(x=[y_M.min(), y_M.max()], y=[y_M.min(), y_M.max()],
-                                      mode="lines", name="Línea ideal", line=dict(dash="dot")))
-        st.plotly_chart(fig_pred, use_container_width=True)
+        # Gráfica: Real vs Predicho #
+        fig_pred = go.Figure()
 
-        # Residuales múltiple
-        residM = y_M - y_pred_M
-        fig_resM = px.scatter(x=y_pred_M, y=residM, labels={"x":"Ŷ", "y":"Residual"},
-                              title="Residuos vs Predicción (múltiple)")
-        fig_resM.add_hline(y=0, line_dash="dot")
-        st.plotly_chart(fig_resM, use_container_width=True)
+        # Puntos azules = valores reales (Y_real vs Y_real)
+        fig_pred.add_trace(go.Scatter(x= y_M, y= y_M, mode= 'markers', name= 'Y real vs Y real', marker=dict(color="blue", size=6, opacity=0.6)))
+
+        # Puntos rojos = valores predichos (Y_real vs Y_pred)
+        fig_pred.add_trace(go.Scatter( x=y_M, y=y_pred_M, mode="markers", name="Y pred vs Y pred", marker=dict(color="red", size=6, opacity=0.6, symbol="circle-open")))
+
+        # Línea ideal y = x's (Referencia de una predicción perfecta)
+        fig_pred.add_trace(go.Scatter(x=[y_M.min(), y_M.max()], y=[y_M.min(), y_M.max()], mode="lines", name="Línea ideal", line=dict(color="gray", dash="dot")))
+
+        fig_pred.update_layout(title = 'Comparación: Y real vs Y predicciones', xaxis_title = 'Y real', yaxis_title= 'Y predicciones',legend=dict(title="Leyenda", orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),plot_bgcolor="rgba(0,0,0,0)" )
+
+        st.plotly_chart(fig_pred, use_container_width= True)
+
+        # Gráfica: Real vs Predicho 
+        fig_pred1 = px.scatter(x=y_M, y=y_pred_M, labels={"x":"Y real ", "y": "Y predicciones"}, title="Comparación Real vs Predicho") 
+        fig_pred1.add_trace(go.Scatter(x=[y_M.min(), y_M.max()], y=[y_M.min(), y_M.max()], mode="lines", name="Línea ideal", line=dict(dash="dot"))) 
+        st.plotly_chart(fig_pred1, use_container_width=True)
+
+        # Mensaje
     else:
         st.info("Selecciona al menos 1 variable para el modelo múltiple.")
+
+    #Contenido Vista 3
+
 
