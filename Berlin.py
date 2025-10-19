@@ -9,7 +9,7 @@ from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score, roc_curve 
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score, roc_curve, classification_report
 from sklearn.linear_model import LinearRegression
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import PolynomialFeatures
@@ -378,107 +378,137 @@ if View == "Regresión No Lineal":
 ##########################################################################################
 # Contenido Vista 4
 if View == "Regresión Logística":
-    st.title("Regresión Logística (binaria)")
+    st.title("Regresión Logística")
 
-    # 1) Detectar columnas binarias
-    bin_cols = []
-    for c in df.columns:
-        vals = df[c].dropna().unique()
+    # 1) Listas base: Y binaria y X numéricas
+    numeric_df = df.select_dtypes(include=['float', 'int'])
+    Lista_num  = list(numeric_df.columns)
+
+    # Detectar dicotómicas (exactamente 2 valores no nulos)
+    # dico_cols = [c for c in df.columns if df[c].dropna().nunique() == 2]
+    dico_cols = []
+    for col in df.columns:
+        vals = df[col].unique()
         if len(vals) == 2:
-            bin_cols.append(c)
+            dico_cols.append(col)
 
-    if len(bin_cols) == 0:
-        st.error("No se detectaron columnas binarias en el dataset.")
-        st.stop()
+    # Sidebar
+    Variable_y = st.sidebar.selectbox("Variable dependiente (Y, binaria)", options=dico_cols)
+    Variables_x = st.sidebar.multiselect("Variables independientes (X, numéricas)", options=Lista_num,)
 
-    # 2) Mapeo automático a 0/1 si es object
-    df_log = df.copy()
-    bin_maps = {}
-    for c in bin_cols:
-        if df_log[c].dtype == 'object':
-            # map a 0/1 con orden alfabético (puedes ajustar)
-            uniques = sorted(df_log[c].dropna().unique().tolist())
-            mapping = {uniques[0]:0, uniques[1]:1}
-            df_log[c] = df_log[c].map(mapping)
-            bin_maps[c] = mapping
-
-    # X candidatas numéricas (evitar que Y se cuele)
-    num_cols = list(df_log.select_dtypes(include=['float','int']).columns)
-
-    colL, colR = st.columns(2)
-    with colL:
-        Variable_y = st.selectbox("Variable dependiente (binaria)", options=bin_cols, key="log_y")
-    with colR:
-        Variables_x = st.multiselect("Variables independientes (numéricas)", options=[c for c in num_cols if c != Variable_y], key="log_xs")
+    # Sliders
+    test_size = st.sidebar.slider("Tamaño de prueba", 0.1, 0.5, 0.30, 0.05)
+    thr = st.sidebar.slider("Umbral de clasificación", 0.05, 0.95, 0.50, 0.01)
 
     if len(Variables_x) == 0:
-        st.info("Selecciona al menos una X para entrenar el modelo.")
-        st.stop()
+        st.info("Selecciona al menos una variable independiente (X).")
+    else:
+        # 2) Preparar X, y (sin modificar df original)
+        X = df[Variables_x].astype(float).values
+        y_raw = df[Variable_y]
 
-    X = df_log[Variables_x].values
-    y = df_log[Variable_y].values
+        # Verificar binaria y mapear SOLO en memoria para el modelo
+        clases = y_raw.dropna().unique().tolist()
+        if len(clases) != 2:
+            st.error(f"La variable '{Variable_y}' debe tener exactamente 2 clases. Encontradas: {clases}")
+        else:
+            mapping = {clases[0]: 0, clases[1]: 1}  # mantiene nombres originales para mostrar
+            y = y_raw.map(mapping).values
 
-    test_size = st.slider("Tamaño de prueba", 0.1, 0.5, 0.3, 0.05)
-    thr = st.slider("Umbral de clasificación", 0.05, 0.95, 0.5, 0.01)
+            # 3) Split + escalado
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size, random_state=42, stratify=y
+            )
+            escalar = StandardScaler()
+            X_train_s = escalar.fit_transform(X_train)
+            X_test_s  = escalar.transform(X_test)
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42, stratify=y)
+            # 4) Modelo
+            algoritmo = LogisticRegression()
+            algoritmo.fit(X_train_s, y_train)
 
-    # Estandarización (tip: ayuda a convergencia)
-    scaler = StandardScaler()
-    X_train_s = scaler.fit_transform(X_train)
-    X_test_s  = scaler.transform(X_test)
+            # 5) Probabilidades y predicción con umbral
+            y_proba = algoritmo.predict_proba(X_test_s)[:, 1]
+            y_pred  = (y_proba >= thr).astype(int)
 
-    logit = LogisticRegression(max_iter=1000, solver="lbfgs")
-    logit.fit(X_train_s, y_train)
+            # 6) Métricas
+            acc    = accuracy_score(y_test, y_pred)
+            prec_c0 = precision_score(y_test, y_pred, pos_label=0, zero_division=0)
+            prec_c1 = precision_score(y_test, y_pred, pos_label=1, zero_division=0)
+            rec_c0  = recall_score(y_test, y_pred, pos_label=0, zero_division=0)
+            rec_c1  = recall_score(y_test, y_pred, pos_label=1, zero_division=0)
+            auc     = roc_auc_score(y_test, y_proba)
 
-    # Probabilidades y predicciones con umbral
-    y_proba = logit.predict_proba(X_test_s)[:,1]
-    y_pred = (y_proba >= thr).astype(int)
+            met_tab = pd.DataFrame({
+                "Métrica": ["Accuracy", f"Precision ({clases[0]})", f"Precision ({clases[1]})",
+                            f"Recall ({clases[0]})", f"Recall ({clases[1]})", "ROC-AUC", "Umbral"],
+                "Valor":   [acc,         prec_c0,                   prec_c1,
+                            rec_c0,                  rec_c1,                  auc,      thr]
+            })
+            st.subheader("Métricas")
+            st.dataframe(met_tab, use_container_width=True)
 
-    # Métricas
-    acc = accuracy_score(y_test, y_pred)
-    prec = precision_score(y_test, y_pred, zero_division=0)
-    rec = recall_score(y_test, y_pred, zero_division=0)
-    auc = roc_auc_score(y_test, y_proba)
+            # 7) Coeficientes y Odds Ratios con nombres de variables
+            coef = algoritmo.coef_[0]
+            intercepto = algoritmo.intercept_[0]
+            coef_tab = pd.DataFrame({
+                "Variable": ["Intercepto"] + Variables_x,
+                "Coeficiente (log-odds)": [intercepto] + list(coef),
+                "Odds Ratio (exp(coef))": [np.exp(intercepto)] + list(np.exp(coef))
+            })
+            st.subheader("Coeficientes del modelo")
+            st.dataframe(coef_tab, use_container_width=True)
 
-    met_df = pd.DataFrame({"Accuracy":[acc], "Precision":[prec], "Recall":[rec], "ROC-AUC":[auc], "Umbral":[thr]})
-    st.dataframe(met_df, use_container_width=True)
+            # 8) Matriz de confusión con etiquetas originales
+            matriz = confusion_matrix(y_test, y_pred, labels=[0, 1])
+            labels_disp = [clases[0], clases[1]]  # orden consistente con mapping
+            fig_cm = go.Figure(data=go.Heatmap(
+                z=matriz,
+                x=[f"Pred {labels_disp[0]}", f"Pred {labels_disp[1]}"],
+                y=[f"Real {labels_disp[0]}", f"Real {labels_disp[1]}"],
+                colorscale="Oranges", showscale=True, hoverongaps=False
+            ))
+            ann = []
+            tags = np.array([["TN","FP"],["FN","TP"]])
+            for i in range(2):
+                for j in range(2):
+                    ann.append(dict(
+                        x=[f"Pred {labels_disp[0]}", f"Pred {labels_disp[1]}"][j],
+                        y=[f"Real {labels_disp[0]}", f"Real {labels_disp[1]}"][i],
+                        text=f"{tags[i,j]}: {matriz[i,j]}",
+                        showarrow=False,
+                        font=dict(color="white" if matriz[i,j] > matriz.max()/2 else "black")
+                    ))
+            fig_cm.update_layout(
+                title="Matriz de confusión",
+                annotations=ann,
+                width=520, height=520
+            )
+            st.plotly_chart(fig_cm, use_container_width=False)
 
-    # Coeficientes y Odds Ratios
-    coef = logit.coef_[0]
-    intercepto = logit.intercept_[0]
-    coef_tab = pd.DataFrame({
-        "Variable": ["Intercepto"] + Variables_x,
-        "Coeficiente (log-odds)": [intercepto] + list(coef),
-        "Odds Ratio (exp(coef))": [np.exp(intercepto)] + list(np.exp(coef))
-    })
-    st.dataframe(coef_tab, use_container_width=True)
+            # 9) Curva ROC
+            fpr, tpr, _ = roc_curve(y_test, y_proba)
+            fig_roc = go.Figure()
+            fig_roc.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines",
+                                         name=f"ROC (AUC={auc:.3f})"))
+            fig_roc.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines",
+                                         name="Aleatorio", line=dict(dash="dot")))
+            fig_roc.update_layout(title="Curva ROC", xaxis_title="FPR", yaxis_title="TPR")
+            st.plotly_chart(fig_roc, use_container_width=True)
 
-    # Matriz de confusión (heatmap)
-    cm = confusion_matrix(y_test, y_pred)
-    fig_cm = go.Figure(data=go.Heatmap(
-        z=cm, x=["Pred 0","Pred 1"], y=["Real 0","Real 1"],
-        colorscale="Oranges", showscale=True, hoverongaps=False
-    ))
-    fig_cm.update_layout(title="Matriz de confusión", width=500, height=500)
-    st.plotly_chart(fig_cm, use_container_width=False)
+            # 10) Probabilidades predichas por clase real + umbral
+            fig_prob = px.strip(
+                x=[labels_disp[i] for i in y_test], y=y_proba,
+                labels={"x":"Clase real", "y":"Probabilidad P(Y=1)"},
+                title="Distribución de probabilidades por clase real")
 
-    # Curva ROC
-    fpr, tpr, _ = roc_curve(y_test, y_proba)
-    fig_roc = go.Figure()
-    fig_roc.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines", name=f"ROC (AUC={auc:.3f})"))
-    fig_roc.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines", name="Aleatorio", line=dict(dash="dot")))
-    fig_roc.update_layout(title="Curva ROC", xaxis_title="FPR", yaxis_title="TPR")
-    st.plotly_chart(fig_roc, use_container_width=True)
+            fig_prob.add_hline(y=thr, line_dash="dot", annotation_text=f"Umbral {thr:.2f}")
+            st.plotly_chart(fig_prob, use_container_width=True)
 
-    # Dispersión de probabilidades predichas vs real
-    fig_prob = px.strip(x=y_test, y=y_proba, labels={"x":"Clase real", "y":"Probabilidad(Y=1)"},
-                        title="Distribución de probabilidades predichas por clase real", jitter=0.3)
-    fig_prob.add_hline(y=thr, line_dash="dot", annotation_text=f"Umbral {thr:.2f}")
-    st.plotly_chart(fig_prob, use_container_width=True)
+            # Nota informativa del mapeo (sin alterar df)
+            st.caption(f"Mapeo interno (solo para el modelo, sin modificar el dataset): "
+                       f"{clases[0]} → 0, {clases[1]} → 1")
 
-    # Nota de mapping si hubo columnas binarias no numéricas
-    if Variable_y in bin_maps:
-        st.caption(f"Mapping aplicado a {Variable_y}: {bin_maps[Variable_y]}")
+
 
 
