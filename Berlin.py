@@ -28,7 +28,7 @@ def load_data():
     df = df.fillna(method= 'bfill')
     df = df.fillna(method= 'ffill')
     # Lista
-    Lista = ['host_response_time', 'host_response_rate', 'room_type', 'property_type']
+    Lista =['host_is_superhost','host_identity_verified','host_response_time','host_response_rate','host_acceptance_rate','host_total_listings_count','host_verifications','room_type','property_type','price_cat']
     return df, Lista
 ####
 # Carga de datos función 'load_data()'
@@ -49,11 +49,12 @@ View = st.sidebar.selectbox(label= 'Tipo de análisis', options= ['Extracción d
 if View == "Extracción de Características":
 
     Variable_Cat = st.sidebar.selectbox(label="Variable categórica a analizar", options=Lista)
-    Tabla_frecuencias = df[Variable_Cat].value_counts().reset_index()
+    Tabla_frecuencias = df[Variable_Cat].value_counts().reset_index().head(10)
     Tabla_frecuencias.columns = ['categorias', 'frecuencia']
 
     st.title("Extracción de Características — Airbnb Berlín")
     #st.write(f"**Variable seleccionada:** {Variable_Cat}")
+    st.caption('Se muestran máximo las 10 categorías con mas frecuencia')
 
     # FILA 1 — Barras Y Pastel
     Contenedor_A, Contenedor_B = st.columns(2)
