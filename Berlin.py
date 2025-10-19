@@ -10,6 +10,7 @@ from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix
+from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
@@ -23,10 +24,12 @@ from scipy import stats
 
 # Crear función de carga de datos
 def load_data():
-    df = pd.read_csv('Berlin_86.csv')
-    # Relleno de nulos
-    df = df.fillna(method= 'bfill')
-    df = df.fillna(method= 'ffill')
+    berlin = pd.read_csv('Berlin_86.csv')
+
+    # Ajuste de variables
+    df = berlin.drop(['Unnamed: 0','latitude', 'longitude'], axis=1)
+    df['host_id'] = df['host_id'].astype(str)
+
     # Lista
     Lista =['host_is_superhost','host_identity_verified','host_response_time','host_response_rate','host_acceptance_rate','host_total_listings_count','host_verifications','room_type','property_type','price_cat']
     return df, Lista
@@ -83,7 +86,7 @@ if View == "Extracción de Características":
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # FILA 2 — Dona Y Área
+    # FILA 2 — Anillo Y Área
     Contenedor_C, Contenedor_D = st.columns(2)
 
     with Contenedor_C:
@@ -146,108 +149,109 @@ if View == "Extracción de Características":
 
   # Contenido Vista 2
 if View == "Regresión Lineal":
-    # Variables numéricas disponibles
-    numeric_df = df.select_dtypes(include=['float', 'int'])
-
-    # Lista de col num
-    Lista_num = list(numeric_df.columns)
-
     st.title("Regresión Lineal")
 
-    # Simple
-    st.subheader("Regresión Lineal Simple")
-    colS1, colS2 = st.columns(2)
-    with colS1:
-        Variable_y = st.selectbox("Variable objetivo (Y)", options=Lista_num, key="rls_y")
-    with colS2:
-        Variable_x = st.selectbox("Variable independiente (X)", options=[c for c in Lista_num if c != Variable_y], key="rls_x")
+    # Variables numéricas disponibles
+    numeric_df = df.select_dtypes(include=['float', 'int']).copy()
+    Lista_num = list(numeric_df.columns)
 
-    # Entrenamiento modelo simple
-    X_s = numeric_df[[Variable_x]].values
-    y_s = numeric_df[Variable_y].values
-    model_s = LinearRegression()
-    model_s.fit(X_s, y_s)
-    y_pred_s = model_s.predict(X_s)
+    # Lineal simple
+    st.subheader("Regresión lineal simple")
+    colL, colR = st.columns(2)
+    with colL:
+        Variable_y = st.selectbox("Variable dependiente (Y)", options=Lista_num, key="rl_y")
+    with colR:
+        Variable_x = st.selectbox("Variable independiente (X)", options=Lista_num, key="rl_x")
+
+    # Ajuste
+    X = numeric_df[[Variable_x]].values
+    y = numeric_df[Variable_y].values
+    model = LinearRegression()
+    model.fit(X, y)
+    y_pred = model.predict(X)
 
     # Métricas
-    r2_s = r2_score(y_s, y_pred_s)
-    mae_s = mean_absolute_error(y_s, y_pred_s)
-    rmse_s = mean_squared_error(y_s, y_pred_s, squared=False)
+    r2 = r2_score(y, y_pred)
+    coef_Deter_simple = model.score(X= X, y= y)
+    coef_Correl_simple = np.sqrt(coef_Deter_simple)
 
-    m = model_s.coef_[0]
-    b = model_s.intercept_
+    # Coeficientes
+    coef_df_simple = pd.DataFrame({
+        "Variable": [Variable_x],
+        "Coeficiente": [model.coef_[0]],
+        "Intercepto": [model.intercept_],
+        "R^2": [r2],
+        "R: ": [coef_Correl_simple],
+        "My R^2: ": [coef_Deter_simple]
+    })
 
-    met_col1, met_col2, met_col3, met_col4, met_col5 = st.columns(5)
-    met_col1.metric("R² (simple)", f"{r2_s:.3f}")
-    met_col2.metric("MAE", f"{mae_s:.3f}")
-    met_col3.metric("RMSE", f"{rmse_s:.3f}")
-    met_col4.metric("Pendiente (β1)", f"{m:.3f}")
-    met_col5.metric("Intercepto (β0)", f"{b:.3f}")
+    st.dataframe(coef_df_simple, use_container_width=True)
 
-    # Figura: dispersión + línea de predicción
-    fig_s = px.scatter(numeric_df, x=Variable_x, y=Variable_y, title="Lineal simple: datos vs. recta ajustada")
-    # Línea ordenada por X para que no zigzaguee
-    order_idx = np.argsort(X_s[:, 0])
-    fig_s.add_trace(
-        go.Scatter(
-            x=X_s[order_idx, 0],
-            y=y_pred_s[order_idx],
-            mode="lines",
-            name="Predicción",
-        )
-    )
-    st.plotly_chart(fig_s, use_container_width=True)
+    # Graf: dispersión + recta y_pred
+    fig_scat = px.scatter(numeric_df, x=Variable_x, y=Variable_y, opacity=0.6, title="Dispersión y recta ajustada")
+    # Línea predicha ordenando por X
+    order_idx = np.argsort(X[:, 0])
+    fig_scat.add_trace(go.Scatter(
+        x=X[order_idx, 0], y=y_pred[order_idx],
+        mode="lines", name="Predicción (Ŷ)"
+    ))
+    st.plotly_chart(fig_scat, use_container_width=True)
+
+    # Residuales
+    resid = y - y_pred
+    fig_res = px.scatter(x=y_pred, y=resid, labels={"x":"Ŷ", "y":"Residual"},
+                         title="Residuos vs Predicción (diagnóstico)")
+    fig_res.add_hline(y=0, line_dash="dot")
+    st.plotly_chart(fig_res, use_container_width=True)
 
     st.markdown("---")
 
-    # Múltiple
-    st.subheader(" Regresión Lineal Múltiple")
-    # Sugerimos por defecto las 2-4 más correlacionadas con Y
-    corrs = numeric_df.corr(numeric_df[Variable_y]).abs().sort_values(ascending=False)
-    sugeridas = [c for c in corrs.index if c != Variable_y][:4]
+    # Lineal múltiple
+    st.subheader("Correlación lineal múltiple")
+    col1, col2 = st.columns([1,2])
+    with col1:
+        Variable_y_M = st.selectbox("Variable dependiente (Y)", options=Lista_num, key="rlm_y")
+    with col2:
+        Variables_x_M = st.multiselect("Variables independientes (X)", options= Lista_num, key="rlm_xs")
 
-    Variables_xM = st.multiselect(
-        "Variables independientes (X)",
-        options=[c for c in Lista_num if c != Variable_y],
-        default=sugeridas
-    )
+    if len(Variables_x_M) >= 1:
+        X_M = numeric_df[Variables_x_M].values
+        y_M = numeric_df[Variable_y_M].values
+        Model_M = LinearRegression()
+        Model_M.fit(X_M, y_M)
+        y_pred_M = Model_M.predict(X_M)
 
-    if len(Variables_xM) >= 1:
-        X_m = numeric_df[Variables_xM].values
-        y_m = numeric_df[Variable_y].values
+        # Métricas
+        #Corroboramos cual es el coeficiente de Determinación de nuestro modelo
+        coef_Deter_multiple= Model_M.score(X=X_M, y= y_M)
+        #Corroboramos cual es el coeficiente de Correlación de nuestro modelo
+        coef_Correl_multiple = np.sqrt(coef_Deter_multiple)
+        r2M = r2_score(y_M, y_pred_M)
+        n, p = X_M.shape
 
-        model_m = LinearRegression()
-        model_m.fit(X_m, y_m)
-        y_pred_m = model_m.predict(X_m)
+        # Coeficientes
+        coef_tab = pd.DataFrame({
+            "Variable": ["Intercepto"] + Variables_x_M,
+            "Coeficiente": [Model_M.intercept_] + list(Model_M.coef_)
+        })
+        st.dataframe(coef_tab, use_container_width=True)
 
-        r2_m = r2_score(y_m, y_pred_m)
-        mae_m = mean_absolute_error(y_m, y_pred_m)
-        rmse_m = mean_squared_error(y_m, y_pred_m, squared=False)
+        met_tab = pd.DataFrame({"R^2":[r2M], 'My R^2': [coef_Deter_multiple], 'R ': [coef_Correl_multiple]})
+        st.dataframe(met_tab, use_container_width=True)
 
-        met2_1, met2_2, met2_3 = st.columns(3)
-        met2_1.metric("R² (múltiple)", f"{r2_m:.3f}")
-        met2_2.metric("MAE", f"{mae_m:.3f}")
-        met2_3.metric("RMSE", f"{rmse_m:.3f}")
+        # Gráfica: Real vs Predicho
+        fig_pred = px.scatter(x=y_M, y=y_pred_M, labels={"x":"Y real", "y":"Ŷ predicho"},
+                              title="Comparación Real vs Predicho")
+        fig_pred.add_trace(go.Scatter(x=[y_M.min(), y_M.max()], y=[y_M.min(), y_M.max()],
+                                      mode="lines", name="Línea ideal", line=dict(dash="dot")))
+        st.plotly_chart(fig_pred, use_container_width=True)
 
-        # Gráfico: y real vs y pred (parity plot) + línea 45°
-        fig_parity = go.Figure()
-        fig_parity.add_trace(go.Scatter(
-            x=y_m, y=y_pred_m, mode="markers", name="Predicciones"
-        ))
-        min_v = float(np.nanmin([y_m.min(), y_pred_m.min()]))
-        max_v = float(np.nanmax([y_m.max(), y_pred_m.max()]))
-        fig_parity.add_trace(go.Scatter(
-            x=[min_v, max_v], y=[min_v, max_v], mode="lines", name="y = ŷ", line=dict(dash="dash")
-        ))
-        fig_parity.update_layout(title="Real vs. Predicho (Múltiple)", xaxis_title="y real", yaxis_title="y predicho")
-        st.plotly_chart(fig_parity, use_container_width=True)
-
-        # Importancias (magnitud de coeficientes estándar aprox. sin escalar)
-        coefs = pd.Series(model_m.coef_, index=Variables_xM).sort_values(key=np.abs, ascending=False)
-        st.caption("Coeficientes del modelo múltiple")
-        st.bar_chart(coefs)
+        # Residuales múltiple
+        residM = y_M - y_pred_M
+        fig_resM = px.scatter(x=y_pred_M, y=residM, labels={"x":"Ŷ", "y":"Residual"},
+                              title="Residuos vs Predicción (múltiple)")
+        fig_resM.add_hline(y=0, line_dash="dot")
+        st.plotly_chart(fig_resM, use_container_width=True)
     else:
-        st.info("Selecciona al menos una variable independiente para el modelo múltiple.")
-
-
+        st.info("Selecciona al menos 1 variable para el modelo múltiple.")
 
