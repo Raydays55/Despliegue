@@ -6,7 +6,7 @@ import plotly.express as px
 import pandas as pd
 import numpy as np
 from scipy.optimize import curve_fit
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix
@@ -109,9 +109,9 @@ if View == "Extracción de Características":
         )
         st.plotly_chart(fig_area, use_container_width=True)
 
-    # FILA 3 — BONUS: HEATMAP o BOXPLOT
+    # FILA 3: Heatmap o Boxplot
     st.markdown("---")
-    st.subheader("Análisis avanzado (Bonus Extra)")
+    st.subheader("Análisis más profundo")
 
     if Variable_Cat in ['room_type', 'property_type', 'price_cat']:
         # Relacionar con variable numérica (precio)
@@ -142,4 +142,112 @@ if View == "Extracción de Características":
     st.subheader("Tabla de frecuencias")
     st.dataframe(Tabla_frecuencias.style.background_gradient(cmap='Blues'))
  ############################################################################
+
+
+  # Contenido Vista 2
+if View == "Regresión Lineal":
+    # Variables numéricas disponibles
+    numeric_df = df.select_dtypes(include=['float', 'int'])
+
+    # Lista de col num
+    Lista_num = list(numeric_df.columns)
+
+    st.title("Regresión Lineal")
+
+    # Simple
+    st.subheader("Regresión Lineal Simple")
+    colS1, colS2 = st.columns(2)
+    with colS1:
+        Variable_y = st.selectbox("Variable objetivo (Y)", options=Lista_num, key="rls_y")
+    with colS2:
+        Variable_x = st.selectbox("Variable independiente (X)", options=[c for c in Lista_num if c != Variable_y], key="rls_x")
+
+    # Entrenamiento modelo simple
+    X_s = numeric_df[[Variable_x]].values
+    y_s = numeric_df[Variable_y].values
+    model_s = LinearRegression()
+    model_s.fit(X_s, y_s)
+    y_pred_s = model_s.predict(X_s)
+
+    # Métricas
+    r2_s = r2_score(y_s, y_pred_s)
+    mae_s = mean_absolute_error(y_s, y_pred_s)
+    rmse_s = mean_squared_error(y_s, y_pred_s, squared=False)
+
+    m = model_s.coef_[0]
+    b = model_s.intercept_
+
+    met_col1, met_col2, met_col3, met_col4, met_col5 = st.columns(5)
+    met_col1.metric("R² (simple)", f"{r2_s:.3f}")
+    met_col2.metric("MAE", f"{mae_s:.3f}")
+    met_col3.metric("RMSE", f"{rmse_s:.3f}")
+    met_col4.metric("Pendiente (β1)", f"{m:.3f}")
+    met_col5.metric("Intercepto (β0)", f"{b:.3f}")
+
+    # Figura: dispersión + línea de predicción
+    fig_s = px.scatter(numeric_df, x=Variable_x, y=Variable_y, title="Lineal simple: datos vs. recta ajustada")
+    # Línea ordenada por X para que no zigzaguee
+    order_idx = np.argsort(X_s[:, 0])
+    fig_s.add_trace(
+        go.Scatter(
+            x=X_s[order_idx, 0],
+            y=y_pred_s[order_idx],
+            mode="lines",
+            name="Predicción",
+        )
+    )
+    st.plotly_chart(fig_s, use_container_width=True)
+
+    st.markdown("---")
+
+    # Múltiple
+    st.subheader(" Regresión Lineal Múltiple")
+    # Sugerimos por defecto las 2-4 más correlacionadas con Y
+    corrs = numeric_df.corr(numeric_df[Variable_y]).abs().sort_values(ascending=False)
+    sugeridas = [c for c in corrs.index if c != Variable_y][:4]
+
+    Variables_xM = st.multiselect(
+        "Variables independientes (X)",
+        options=[c for c in Lista_num if c != Variable_y],
+        default=sugeridas
+    )
+
+    if len(Variables_xM) >= 1:
+        X_m = numeric_df[Variables_xM].values
+        y_m = numeric_df[Variable_y].values
+
+        model_m = LinearRegression()
+        model_m.fit(X_m, y_m)
+        y_pred_m = model_m.predict(X_m)
+
+        r2_m = r2_score(y_m, y_pred_m)
+        mae_m = mean_absolute_error(y_m, y_pred_m)
+        rmse_m = mean_squared_error(y_m, y_pred_m, squared=False)
+
+        met2_1, met2_2, met2_3 = st.columns(3)
+        met2_1.metric("R² (múltiple)", f"{r2_m:.3f}")
+        met2_2.metric("MAE", f"{mae_m:.3f}")
+        met2_3.metric("RMSE", f"{rmse_m:.3f}")
+
+        # Gráfico: y real vs y pred (parity plot) + línea 45°
+        fig_parity = go.Figure()
+        fig_parity.add_trace(go.Scatter(
+            x=y_m, y=y_pred_m, mode="markers", name="Predicciones"
+        ))
+        min_v = float(np.nanmin([y_m.min(), y_pred_m.min()]))
+        max_v = float(np.nanmax([y_m.max(), y_pred_m.max()]))
+        fig_parity.add_trace(go.Scatter(
+            x=[min_v, max_v], y=[min_v, max_v], mode="lines", name="y = ŷ", line=dict(dash="dash")
+        ))
+        fig_parity.update_layout(title="Real vs. Predicho (Múltiple)", xaxis_title="y real", yaxis_title="y predicho")
+        st.plotly_chart(fig_parity, use_container_width=True)
+
+        # Importancias (magnitud de coeficientes estándar aprox. sin escalar)
+        coefs = pd.Series(model_m.coef_, index=Variables_xM).sort_values(key=np.abs, ascending=False)
+        st.caption("Coeficientes del modelo múltiple")
+        st.bar_chart(coefs)
+    else:
+        st.info("Selecciona al menos una variable independiente para el modelo múltiple.")
+
+
 
