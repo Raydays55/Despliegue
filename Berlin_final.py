@@ -40,50 +40,68 @@ st.set_page_config(
 AIRBNB_RED   = "#FF5A5F"
 AIRBNB_TEAL  = "#00A699"
 AIRBNB_ORANGE= "#FC642D"
-AIRBNB_GRAY  = "#767676"
+AIRBNB_GRAY  = "#BFBFBF"
+AIRBNB_DARK_BG = "#0E1117"   # fondo oscuro principal
+AIRBNB_CARD   = "#151A22"    # tarjetas
+AIRBNB_BORDER = "#232A35" 
+CONT_GRADIENT = "Reds" # para heatmaps
 
-# CSS fino para look&feel Airbnb
+# CSS look and feel Airbnb
 st.markdown(
     f"""
     <style>
     .block-container {{ padding-top: 1.2rem; padding-bottom: 2rem; }}
 
-    h1, h2, h3 {{ letter-spacing: .2px; }}
+    /* TITULARES */
+    h1, h2, h3 {{ letter-spacing:.2px; }}
 
+    /* === UN SOLO LOOK OSCURO (sidebar + contenido) === */
+    html, body, [data-testid="stAppViewContainer"] {{
+        background:{AIRBNB_DARK_BG} !important;
+        color: white !important;
+    }}
+    section[data-testid="stSidebar"] {{
+        background:{AIRBNB_DARK_BG} !important;
+        border-right: 1px solid {AIRBNB_BORDER};
+        color: white !important;
+    }}
+
+    /* Tarjetas KPI */
+    .air-card {{
+        border: 1px solid {AIRBNB_BORDER};
+        border-radius:16px; padding:1rem;
+        background:{AIRBNB_CARD};
+        box-shadow:none;
+    }}
+
+    /* Botones */
     .stButton>button {{
         background:{AIRBNB_RED}; color:white; border-radius:12px; border:none;
         padding:.6rem 1rem; font-weight:600;
     }}
     .stButton>button:hover {{ opacity:.9 }}
 
-    section[data-testid="stSidebar"] {{
-        background: #ffffff;
-        border-right: 1px solid #eee;
+    /* Quitar “píldoras”/fondos blancos en métricas */
+    [data-testid="stMetricDelta"], .stMetric {{"background": "transparent"}}
+    div[data-testid="stMetricValue"] > div {{
+        background: transparent !important;
     }}
 
-    .air-card {{
-        border: 1px solid #eee; border-radius:16px; padding:1rem; background:#fff;
-        box-shadow: 0 1px 2px rgba(0,0,0,.03);
-    }}
-
-    .air-footer {{
-        color:{AIRBNB_GRAY}; font-size:.9rem; margin-top:1.2rem;
-    }}
+    /* Tablas en oscuro */
+    .stDataFrame, .stTable {{ color: white !important; }}
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# Plotly: template y colorway coherentes
-px.defaults.template = "plotly_white"
-px.defaults.color_continuous_scale = "Tealgrn"
-px.defaults.width = None
+# Plotly: plantilla con colorway Airbnb
+AIRBNB_COLORWAY = ["#FF5A5F", "#00A699", "#FC642D", "#BFBFBF", "#767676"]
+import plotly.io as pio
+pio.templates["airbnb_dark"] = pio.templates["plotly_dark"]
+pio.templates["airbnb_dark"].layout.colorway = AIRBNB_COLORWAY
+px.defaults.template = "airbnb_dark"
+px.defaults.color_continuous_scale = CONT_GRADIENT
 px.defaults.height = 420
-
-AIRBNB_COLORWAY = ["#FF5A5F", "#00A699", "#FC642D", "#484848", "#767676"]
-pio.templates["airbnb"] = pio.templates["plotly_white"]
-pio.templates["airbnb"].layout.colorway = AIRBNB_COLORWAY
-px.defaults.template = "airbnb"
 
 
 ##########
@@ -126,30 +144,6 @@ with col_title:
         unsafe_allow_html=True
     )
 
-# KPIs rápidos
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.markdown('<div class="air-card">', unsafe_allow_html=True)
-    st.metric("Registros", f"{len(df):,}")
-    st.markdown('</div>', unsafe_allow_html=True)
-with col2:
-    st.markdown('<div class="air-card">', unsafe_allow_html=True)
-    st.metric("Tipos de habitación", df['room_type'].nunique() if 'room_type' in df.columns else "—")
-    st.markdown('</div>', unsafe_allow_html=True)
-with col3:
-    st.markdown('<div class="air-card">', unsafe_allow_html=True)
-    med_price = np.nanmedian(df['price']) if 'price' in df.columns else np.nan
-    st.metric("Precio mediano", f"${med_price:,.0f}" if np.isfinite(med_price) else "—")
-    st.markdown('</div>', unsafe_allow_html=True)
-with col4:
-    st.markdown('<div class="air-card">', unsafe_allow_html=True)
-    superhosts = (df['host_is_superhost']==1).sum() if 'host_is_superhost' in df.columns else "—"
-    st.metric("Superhosts", superhosts)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown("---")
-
-
 ##########
 # Sidebar con identidad
 st.sidebar.image("assets/Logo.jpg", use_container_width=True)
@@ -172,10 +166,34 @@ View = st.sidebar.selectbox(
 # CONTENIDO DE LA VISTA 1 — EXTRACCIÓN DE CARACTERÍSTICAS
 if View == "Extracción de Características":
 
+    # KPIs
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown('<div class="air-card">', unsafe_allow_html=True)
+        st.metric("Registros", f"{len(df):,}")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<div class="air-card">', unsafe_allow_html=True)
+        st.metric("Tipos de habitación", df['room_type'].nunique() if 'room_type' in df.columns else "—")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown('<div class="air-card">', unsafe_allow_html=True)
+        med_price = np.nanmedian(df['price']) if 'price' in df.columns else np.nan
+        st.metric("Precio mediano", f"${med_price:,.0f}" if np.isfinite(med_price) else "—")
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col4:
+        st.markdown('<div class="air-card">', unsafe_allow_html=True)
+        superhosts = (df['host_is_superhost']==1).sum() if 'host_is_superhost' in df.columns else "—"
+        st.metric("Superhosts", superhosts)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("---")
+
     Variable_Cat = st.sidebar.selectbox(label="Variable categórica a analizar", options=Lista)
     Tabla_frecuencias = df[Variable_Cat].value_counts(dropna=False).reset_index().head(10)
     Tabla_frecuencias.columns = ['categorias', 'frecuencia']
 
+    # Comienzo
     st.title("Extracción de Características")
     st.caption('Se muestran máximo las 10 categorías con más frecuencia.')
 
@@ -188,7 +206,7 @@ if View == "Extracción de Características":
             Tabla_frecuencias,
             x='categorias',
             y='frecuencia',
-            color='frecuencia',
+            color='categorias',
             title=f"Frecuencia por categoría — {Variable_Cat}"
         )
         fig_bar.update_layout(height=400)
@@ -243,10 +261,10 @@ if View == "Extracción de Características":
         )
         st.plotly_chart(fig_box, use_container_width=True)
     else:
-        st.write("**Mapa de calor de proporciones (Heatmap):**")
+        st.write("**Heatmap de proporciones:**")
         heat_df = pd.crosstab(index=df[Variable_Cat], columns='count', normalize='columns') * 100
         fig_heat = px.imshow(
-            heat_df,
+            heat_df, color_continuous_scale = CONT_GRADIENT,
             title=f"Proporción por categoría — {Variable_Cat}",
             text_auto=".1f"
         )
@@ -256,7 +274,7 @@ if View == "Extracción de Características":
     if not modo_presentacion:
         st.markdown("---")
         st.subheader("Tabla de frecuencias")
-        st.dataframe(Tabla_frecuencias.style.background_gradient(cmap='Blues'), use_container_width=True)
+        st.dataframe(Tabla_frecuencias.style.background_gradient(cmap='Reds'), use_container_width=True)
 
     # Galería visual (marca de contexto)
     st.markdown(" Apartamento con vista a la montaña y piscina cubierta: Berlin, Alemania Airbnb")
