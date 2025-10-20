@@ -1,4 +1,5 @@
-# Se crea el archivo de la APP en el interprete principal (Python)
+# Berlin Final Dashboard.
+# Con ayuda de IA, se logró mejorar el código de despligue y mejorar el dashboard.
 
 ##########
 # Importar librerías
@@ -145,7 +146,7 @@ with col_title:
 
 ##########
 # Sidebar con identidad
-st.sidebar.image("assets/Logo.jpg", use_container_width=True, width= 70)
+st.sidebar.image("assets/Logoo.jpg", use_container_width=True, width= 70)
 st.sidebar.caption("Análisis exploratorio y modelos)")
 st.sidebar.markdown("---")
 #st.sidebar.title('Berlín, Alemania')
