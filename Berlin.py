@@ -392,7 +392,7 @@ if View == "Regresión Logística":
         if len(vals) == 2:
             dico_cols.append(col)
 
-    # Decidí hacerlo por selectbox
+    # Decidí hacerlo por selectbox, no fue una buena idea
     #contA, contB = st.columns(2)
     #with contA:
     #    Variable_y = st.selectbox('Variable dependiente (Y, dicotómica)', options= dico_cols)
@@ -438,17 +438,17 @@ if View == "Regresión Logística":
             y_proba = algoritmo.predict_proba(X_test_s)[:, 1]
             y_pred  = (y_proba >= thr).astype(int)
 
-            # 6) Métricas
-            acc    = accuracy_score(y_test, y_pred)
-            prec_c0 = precision_score(y_test, y_pred, pos_label=0, zero_division=0)
+            # 6) Coeficientes
+            acc    = accuracy_score(y_test, y_pred) # exactitud
+            prec_c0 = precision_score(y_test, y_pred, pos_label=0, zero_division=0) # precisión
             prec_c1 = precision_score(y_test, y_pred, pos_label=1, zero_division=0)
-            rec_c0  = recall_score(y_test, y_pred, pos_label=0, zero_division=0)
+            rec_c0  = recall_score(y_test, y_pred, pos_label=0, zero_division=0) # sensibilidad
             rec_c1  = recall_score(y_test, y_pred, pos_label=1, zero_division=0)
             auc     = roc_auc_score(y_test, y_proba)
 
             met_tab = pd.DataFrame({
-                "Métrica": ["Accuracy", f"Precision ({clases[0]})", f"Precision ({clases[1]})",
-                            f"Recall ({clases[0]})", f"Recall ({clases[1]})", "ROC-AUC", "Umbral"],
+                "Métrica": ["Exactitud", f"Precision ({clases[0]})", f"Precision ({clases[1]})",
+                            f"Sensibilidad ({clases[0]})", f"Sensibilidad ({clases[1]})", "ROC-AUC", "Umbral"],
                 "Valor":   [acc,         prec_c0,                   prec_c1,
                             rec_c0,                  rec_c1,                  auc,      thr]
             })
