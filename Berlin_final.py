@@ -1,74 +1,71 @@
-# Se crea el archivo de la APP en el interprete principal (Phyton)
+# Se crea el archivo de la APP en el interprete principal (Python)
+
 ##########
 # Importar librerías
-import streamlit as st 
+import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
+import plotly.io as pio
+
 import pandas as pd
 import numpy as np
+
 from scipy.optimize import curve_fit
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score, roc_curve, classification_report
-from sklearn.linear_model import LinearRegression
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import PolynomialFeatures
-import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.graph_objects as go
-import statsmodels.api as sm 
-from statsmodels.formula.api import ols
 from scipy import stats
 
-# Con ayuda de IA, se logró mejorar el código de despligue
+from sklearn.metrics import (
+    r2_score, mean_absolute_error, mean_squared_error,
+    confusion_matrix, accuracy_score, precision_score,
+    recall_score, roc_auc_score, roc_curve, classification_report
+)
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression, LogisticRegression
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
 
-# Personalización
-# --- Page config (antes de cualquier st.*) ---
+##########
+# Configuración global
 st.set_page_config(
-    page_title="Airbnb — Berlín (Data App)",
-    page_icon="assets/airbnb_favicon.png",
+    page_title="Airbnb — Berlín (Data Web)",
+    page_icon= "assets/airbnb_icon.jpg",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- CSS fino para look&feel Airbnb ---
-AIRBNB_RED = "#FF5A5F"
-AIRBNB_TEAL = "#00A699"
-AIRBNB_ORANGE = "#FC642D"
-AIRBNB_GRAY = "#767676"
+# Paleta y colores Airbnb
+AIRBNB_RED   = "#FF5A5F"
+AIRBNB_TEAL  = "#00A699"
+AIRBNB_ORANGE= "#FC642D"
+AIRBNB_GRAY  = "#767676"
 
+# CSS fino para look&feel Airbnb
 st.markdown(
     f"""
     <style>
-    /* Anchura del contenedor principal */
     .block-container {{ padding-top: 1.2rem; padding-bottom: 2rem; }}
 
-    /* Titulares con acento */
-    h1, h2, h3 {{
-        letter-spacing: .2px;
-    }}
+    h1, h2, h3 {{ letter-spacing: .2px; }}
 
-    /* Botones */
     .stButton>button {{
         background:{AIRBNB_RED}; color:white; border-radius:12px; border:none;
         padding:.6rem 1rem; font-weight:600;
     }}
     .stButton>button:hover {{ opacity:.9 }}
 
-    /* Sidebar */
     section[data-testid="stSidebar"] {{
         background: #ffffff;
         border-right: 1px solid #eee;
     }}
 
-    /* Cajas tipo "card" para KPIs */
     .air-card {{
         border: 1px solid #eee; border-radius:16px; padding:1rem; background:#fff;
         box-shadow: 0 1px 2px rgba(0,0,0,.03);
     }}
 
-    /* Pie de página */
     .air-footer {{
         color:{AIRBNB_GRAY}; font-size:.9rem; margin-top:1.2rem;
     }}
@@ -77,50 +74,112 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# Plotly: template y colorway coherentes
+px.defaults.template = "plotly_white"
+px.defaults.color_continuous_scale = "Tealgrn"
+px.defaults.width = None
+px.defaults.height = 420
 
-# Definir instancia
+AIRBNB_COLORWAY = ["#FF5A5F", "#00A699", "#FC642D", "#484848", "#767676"]
+pio.templates["airbnb"] = pio.templates["plotly_white"]
+pio.templates["airbnb"].layout.colorway = AIRBNB_COLORWAY
+px.defaults.template = "airbnb"
+
+
+##########
+# Carga de datos
 @st.cache_resource
-#####
-
-# Crear función de carga de datos
 def load_data():
     berlin = pd.read_csv('Berlin_86.csv')
 
     # Ajuste de variables
-    df = berlin.drop(['Unnamed: 0','latitude', 'longitude'], axis=1)
+    df = berlin.drop(['Unnamed: 0','latitude', 'longitude'], axis=1, errors="ignore")
     df['host_id'] = df['host_id'].astype(str)
 
-    # Lista
-    Lista =['host_is_superhost','host_identity_verified','host_response_time','host_response_rate','host_acceptance_rate','host_total_listings_count','host_verifications','room_type','property_type','price_cat']
+    # Lista de categóricas comunes
+    Lista = [
+        'host_is_superhost','host_identity_verified','host_response_time',
+        'host_response_rate','host_acceptance_rate','host_total_listings_count',
+        'host_verifications','room_type','property_type','price_cat'
+    ]
     return df, Lista
-####
+
+
 # Carga de datos función 'load_data()'
 df, Lista = load_data()
 
-####
-# Creación del dashboard
-# Generar las páginas a utiizar en el diseño
-####
-# Generamos encabezados para barra lateral (sidebar)
+
+##########
+# HERO HEADER (branding + KPIs)
+col_logo, col_title = st.columns([1,5], vertical_alignment="center")
+with col_logo:
+    try:
+        st.image("assets/Logo.jpg", width=96)
+    except Exception:
+        st.write("🏠")
+with col_title:
+    st.markdown(
+        """
+        # Airbnb — **Berlín**
+        <span style="color:#767676">Listados, precios y comportamiento de oferta</span>
+        """,
+        unsafe_allow_html=True
+    )
+
+# KPIs rápidos
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.markdown('<div class="air-card">', unsafe_allow_html=True)
+    st.metric("Registros", f"{len(df):,}")
+    st.markdown('</div>', unsafe_allow_html=True)
+with col2:
+    st.markdown('<div class="air-card">', unsafe_allow_html=True)
+    st.metric("Tipos de habitación", df['room_type'].nunique() if 'room_type' in df.columns else "—")
+    st.markdown('</div>', unsafe_allow_html=True)
+with col3:
+    st.markdown('<div class="air-card">', unsafe_allow_html=True)
+    med_price = np.nanmedian(df['price']) if 'price' in df.columns else np.nan
+    st.metric("Precio mediano", f"${med_price:,.0f}" if np.isfinite(med_price) else "—")
+    st.markdown('</div>', unsafe_allow_html=True)
+with col4:
+    st.markdown('<div class="air-card">', unsafe_allow_html=True)
+    superhosts = (df['host_is_superhost']==1).sum() if 'host_is_superhost' in df.columns else "—"
+    st.metric("Superhosts", superhosts)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown("---")
+
+
+##########
+# Sidebar con identidad
+st.sidebar.image("assets/Logo.jpg", use_container_width=True)
+st.sidebar.caption("Análisis exploratorio y modelos — **Airbnb Berlín**")
+st.sidebar.markdown("---")
 st.sidebar.title('Berlín, Alemania')
 
-# Widget 1: Selectbox
-# Menú desplegable de opciones de las páginas seleccionadas
-View = st.sidebar.selectbox(label= 'Tipo de análisis', options= ['Extracción de Características', 'Regresión Lineal', 'Regresión No Lineal', 'Regresión Logística'])
+# Toggle de modo “presentación” (oculta tablas largas)
+modo_presentacion = st.sidebar.toggle("Modo presentación (ocultar tablas)", value=False)
+
+# Menú de vistas
+View = st.sidebar.selectbox(
+    label= 'Tipo de análisis',
+    options= ['Extracción de Características', 'Regresión Lineal', 'Regresión No Lineal', 'Regresión Logística'],
+    index=0
+)
+
 
 ##########################################################################################
-# CONTENIDO DE LA VISTA 1
+# CONTENIDO DE LA VISTA 1 — EXTRACCIÓN DE CARACTERÍSTICAS
 if View == "Extracción de Características":
 
     Variable_Cat = st.sidebar.selectbox(label="Variable categórica a analizar", options=Lista)
-    Tabla_frecuencias = df[Variable_Cat].value_counts().reset_index().head(10)
+    Tabla_frecuencias = df[Variable_Cat].value_counts(dropna=False).reset_index().head(10)
     Tabla_frecuencias.columns = ['categorias', 'frecuencia']
 
-    st.title("Extracción de Características — Airbnb Berlín")
-    #st.write(f"**Variable seleccionada:** {Variable_Cat}")
-    st.caption('Se muestran máximo las 10 categorías con mas frecuencia')
+    st.title("Extracción de Características")
+    st.caption('Se muestran máximo las 10 categorías con más frecuencia.')
 
-    # Fila 1 — Barras Y Pastel
+    # FILA 1 — Barras y Pastel
     Contenedor_A, Contenedor_B = st.columns(2)
 
     with Contenedor_A:
@@ -130,7 +189,6 @@ if View == "Extracción de Características":
             x='categorias',
             y='frecuencia',
             color='frecuencia',
-            color_continuous_scale='Viridis',
             title=f"Frecuencia por categoría — {Variable_Cat}"
         )
         fig_bar.update_layout(height=400)
@@ -142,12 +200,11 @@ if View == "Extracción de Características":
             Tabla_frecuencias,
             names='categorias',
             values='frecuencia',
-            color_discrete_sequence=px.colors.sequential.Tealgrn,
             title=f"Distribución porcentual — {Variable_Cat}"
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # Fila 2 — Anillo Y Área
+    # FILA 2 — Dona y Área
     Contenedor_C, Contenedor_D = st.columns(2)
 
     with Contenedor_C:
@@ -157,7 +214,6 @@ if View == "Extracción de Características":
             names='categorias',
             values='frecuencia',
             hole=0.5,
-            color_discrete_sequence=px.colors.sequential.Mint,
             title=f"Gráfico de dona — {Variable_Cat}"
         )
         st.plotly_chart(fig_donut, use_container_width=True)
@@ -168,51 +224,61 @@ if View == "Extracción de Características":
             Tabla_frecuencias.sort_values(by='frecuencia', ascending=False),
             x='categorias',
             y='frecuencia',
-            title=f"Tendencia de frecuencia — {Variable_Cat}",
-            color_discrete_sequence=['#5C8D89']
+            title=f"Tendencia de frecuencia — {Variable_Cat}"
         )
         st.plotly_chart(fig_area, use_container_width=True)
 
-    # Fila 3: Heatmap o Boxplot
+    # FILA 3: Heatmap o Boxplot
     st.markdown("---")
     st.subheader("Análisis más profundo")
 
-    if Variable_Cat in ['room_type', 'property_type', 'price_cat']:
-        # Relacionar con variable numérica (precio)
-        st.write("**Relación entre categorías y precio promedio (Boxplot):**")
+    if Variable_Cat in ['room_type', 'property_type', 'price_cat'] and 'price' in df.columns:
+        st.write("**Relación entre categorías y precio (Boxplot):**")
         fig_box = px.box(
             df,
             x=Variable_Cat,
             y='price',
             color=Variable_Cat,
-            title=f"Distribución de precios según {Variable_Cat}",
-            color_discrete_sequence=px.colors.sequential.Viridis
+            title=f"Distribución de precios según {Variable_Cat}"
         )
         st.plotly_chart(fig_box, use_container_width=True)
     else:
-        # Heatmap simple con frecuencia normalizada
         st.write("**Mapa de calor de proporciones (Heatmap):**")
         heat_df = pd.crosstab(index=df[Variable_Cat], columns='count', normalize='columns') * 100
         fig_heat = px.imshow(
             heat_df,
-            color_continuous_scale='Viridis',
             title=f"Proporción por categoría — {Variable_Cat}",
             text_auto=".1f"
         )
         st.plotly_chart(fig_heat, use_container_width=True)
 
-    # Tabla de frecuencias
-    st.markdown("---")
-    st.subheader("Tabla de frecuencias")
-    st.dataframe(Tabla_frecuencias.style.background_gradient(cmap='Blues'))
+    # Tabla de frecuencias (ocultable)
+    if not modo_presentacion:
+        st.markdown("---")
+        st.subheader("Tabla de frecuencias")
+        st.dataframe(Tabla_frecuencias.style.background_gradient(cmap='Blues'), use_container_width=True)
 
- ##########################################################################################
-  # Contenido Vista 2
+    # Galería visual (marca de contexto)
+    st.markdown(" Apartamento con vista a la montaña y piscina cubierta: Berlin, Alemania Airbnb")
+    g1, g2, g3 = st.columns(3)
+    with g1:
+        try: st.image("assets/Berlin1.jpg", use_container_width=True)
+        except Exception: pass
+    with g2:
+        try: st.image("assets/Berlin3.jpg", use_container_width=True)
+        except Exception: pass
+    with g3:
+        try: st.image("assets/Berlin2.jpg", use_container_width=True)
+        except Exception: pass
+
+
+##########################################################################################
+# Vista 2 
 if View == "Regresión Lineal":
     st.title("Regresión Lineal")
 
     # Variables numéricas disponibles
-    numeric_df = df.select_dtypes(include=['float', 'int']).copy()
+    numeric_df = df.select_dtypes(include=['float', 'float64', 'int', 'int64']).copy()
     Lista_num = list(numeric_df.columns)
 
     # Lineal simple
@@ -240,13 +306,14 @@ if View == "Regresión Lineal":
         "Variable": [Variable_x],
         "Coeficiente": [model.coef_[0]],
         "Intercepto": [model.intercept_],
-        "R: ": [coef_Correl_simple],
-        "R^2: ": [coef_Deter_simple]
+        "R": [coef_Correl_simple],
+        "R^2": [coef_Deter_simple]
     })
 
-    st.dataframe(coef_df_simple, use_container_width=True)
+    if not modo_presentacion:
+        st.dataframe(coef_df_simple, use_container_width=True)
 
-    # Graf: dispersión + recta y_pred
+    # Gráfica: dispersión + recta y_pred
     fig_scat = px.scatter(numeric_df, x=Variable_x, y=Variable_y, opacity=0.6, title="Dispersión y recta ajustada")
     # Línea predicha ordenando por X
     order_idx = np.argsort(X[:, 0])
@@ -258,7 +325,7 @@ if View == "Regresión Lineal":
 
     # Residuales
     resid = y - y_pred
-    fig_res = px.scatter(x=y_pred, y=resid, labels={"x":"Variable Independiente", "y":"Residual"},
+    fig_res = px.scatter(x=y_pred, y=resid, labels={"x":"Ŷ", "y":"Residual"},
                          title="Residuos vs Predicción (diagnóstico)")
     fig_res.add_hline(y=0, line_dash="dot")
     st.plotly_chart(fig_res, use_container_width=True)
@@ -266,7 +333,7 @@ if View == "Regresión Lineal":
     st.markdown("---")
 
     # Lineal múltiple
-    st.subheader("Regresión múltiple")
+    st.subheader("Correlación lineal múltiple")
     col1, col2 = st.columns([1,2])
     with col1:
         Variable_y_M = st.selectbox("Variable dependiente (Y)", options=Lista_num, key="rlm_y")
@@ -281,40 +348,35 @@ if View == "Regresión Lineal":
         y_pred_M = Model_M.predict(X_M)
 
         # Métricas
-        #Corroboramos cual es el coeficiente de Determinación de nuestro modelo
         coef_Deter_multiple= Model_M.score(X=X_M, y= y_M)
-        #Corroboramos cual es el coeficiente de Correlación de nuestro modelo
         coef_Correl_multiple = np.sqrt(abs(coef_Deter_multiple))
-        #r2M = r2_score(y_M, y_pred_M)
-        n, p = X_M.shape
 
         # Coeficientes
         coef_tab = pd.DataFrame({
             "Variable": ["Intercepto"] + Variables_x_M,
             "Coeficiente": [Model_M.intercept_] + list(Model_M.coef_)
         })
-        st.dataframe(coef_tab, use_container_width=True)
+        if not modo_presentacion:
+            st.dataframe(coef_tab, use_container_width=True)
 
         met_tab = pd.DataFrame({'R^2': [coef_Deter_multiple], 'R ': [coef_Correl_multiple]})
         st.dataframe(met_tab, use_container_width=True)
 
-        # Gráfica: Real vs Predicho 
-        fig_pred = px.scatter(x=y_M, y=y_pred_M, labels={"x":"Y real ", "y": "Y predicciones"}, title="Comparación Y Real vs Y Predicciones") 
-        fig_pred.add_trace(go.Scatter(x=[y_M.min(), y_M.max()], y=[y_M.min(), y_M.max()], mode="lines", name="Línea ideal", line=dict(dash="dot"))) 
+        # Gráfica: Real vs Predicho
+        fig_pred = px.scatter(x=y_M, y=y_pred_M, labels={"x":"Y real ", "y": "Y predicciones"}, title="Comparación Y Real vs Y Predicciones")
+        fig_pred.add_trace(go.Scatter(x=[y_M.min(), y_M.max()], y=[y_M.min(), y_M.max()], mode="lines", name="Línea ideal", line=dict(dash="dot")))
         st.plotly_chart(fig_pred, use_container_width=True)
-
-        # Mensaje
     else:
         st.info("Selecciona al menos 1 variable para el modelo múltiple.")
 
 
 ##########################################################################################
-# Contenido Vista 3
+# Vista 3
 if View == "Regresión No Lineal":
     st.title("Regresión No Lineal")
 
     # Variables numéricas
-    numeric_df = df.select_dtypes(include=['float','int']).copy()
+    numeric_df = df.select_dtypes(include=['float','float64','int','int64']).copy()
     Lista_num = list(numeric_df.columns)
 
     contA, contB = st.columns(2)
@@ -324,7 +386,12 @@ if View == "Regresión No Lineal":
         Variable_x = st.selectbox("Variable independiente (X)", options=[c for c in Lista_num if c != Variable_y], key="rnl_x_cf")
 
     # Modelos disponibles
-    modelos = ["Función cuadrática (a*x**2 + b*x + c)", "Función exponencial (a*np.exp(-b*x)+c)", "Función potencia (a*x**b)", "Función cúbica (a*x**3 + b*x**2 + c*x + d)"]
+    modelos = [
+        "Función cuadrática (a*x**2 + b*x + c)",
+        "Función exponencial (a*np.exp(-b*x)+c)",
+        "Función potencia (a*x**b)",
+        "Función cúbica (a*x**3 + b*x**2 + c*x + d)"
+    ]
     Modelo = st.selectbox("Elige modelo no lineal", options=modelos, key="rnl_modelo_cf")
 
     # Datos
@@ -341,22 +408,15 @@ if View == "Regresión No Lineal":
         return a*x**3 + b*x**2 + c*x + d
 
     def func_exp(x, a, b, c):
-        # a*exp(bx)+c
         return a * np.exp(-b * x) + c
 
     def func_pot(x, a, b):
-        # a*x^b
         return a * np.power(x, b)
 
-    # Estimaciones iniciales p0 (robustas por defecto)
-    # Se ajustan por modelo y por escala de los datos
-    x_rng = np.ptp(x) if np.ptp(x) != 0 else 1.0
-    y_rng = np.ptp(y) if np.ptp(y) != 0 else 1.0
-    y_mean = np.nanmean(y)
-
+    # Ajuste
     try:
         if Modelo == "Función cuadrática (a*x**2 + b*x + c)":
-            pars, cov = curve_fit(func_cuad, x, y, maxfev=20000) # maxfev evita errores por iteraciones insuficientes
+            pars, cov = curve_fit(func_cuad, x, y, maxfev=20000)
             y_pred = func_cuad(x, *pars)
             y_line = func_cuad(x_sorted, *pars)
             params_df = pd.DataFrame({"Parámetro": ["a", "b", "c"], "Valor": pars})
@@ -368,14 +428,10 @@ if View == "Regresión No Lineal":
             params_df = pd.DataFrame({"Parámetro": ["a", "b", "c", "d"], "Valor": pars})
 
         elif Modelo == "Función exponencial (a*np.exp(-b*x)+c)":
-            # Requiere y “razonables”. Filtramos si y es muy pequeña o negativa para evitar desbordes.
             mask = np.isfinite(y)
             if np.sum(mask) < 3:
                 st.error("No hay suficientes datos válidos para ajustar el modelo exponencial.")
                 st.stop()
-            a0 = max(y) - min(y)
-            b0 = 0.01 / x_rng
-            c0 = min(y)
             pars, cov = curve_fit(func_exp, x, y, maxfev=30000)
             y_pred = func_exp(x, *pars)
             y_line = func_exp(x_sorted, *pars)
@@ -388,10 +444,8 @@ if View == "Regresión No Lineal":
                 st.error("Para la función potencia se requieren suficientes valores con x>0 e y>0.")
                 st.stop()
             x_pos, y_pos = x[mask], y[mask]
-            b0 = 1.0
-            a0 = np.exp(np.mean(np.log(y_pos) - b0*np.log(x_pos)))
-            pars, cov = curve_fit(func_pow, x_pos, y_pos, maxfev=20000)
-            # Predicciones en todo el rango (para evitar potencias de x<=0, usamos clip pequeño)
+            pars, cov = curve_fit(func_pot, x_pos, y_pos, maxfev=20000)
+            # Predicciones seguras en todo el rango
             x_safe = np.clip(x, 1e-12, None)
             x_sorted_safe = np.clip(x_sorted, 1e-12, None)
             y_pred = func_pot(x_safe, *pars)
@@ -408,20 +462,21 @@ if View == "Regresión No Lineal":
 
         # Salidas
         st.markdown("**Parámetros estimados (curve_fit):**")
-        st.dataframe(params_df, use_container_width=True)
+        if not modo_presentacion:
+            st.dataframe(params_df, use_container_width=True)
 
         st.markdown("**Métricas del ajuste:**")
         st.dataframe(pd.DataFrame({"R^2":[r2], "R ":[r]}), use_container_width=True)
 
-        # Gráfica: dispersión + curva predicha (ordenada por X)
+        # Gráfica: dispersión + curva predicha
         fig = px.scatter(x=x, y=y, labels={"x": Variable_x, "y": Variable_y},
-                         opacity=0.6, title=f"{Modelo} — Dispersión y curva ajustada (curve_fit)")
-        fig.add_trace(go.Scatter(x=x_sorted, y=y_line, mode="lines", name="Ŷ (curva)", line=dict(width=2)))
+                         opacity=0.6, title=f"{Modelo} — Dispersión y curva ajustada")
+        fig.add_trace(go.Scatter(x=x_sorted, y=y_line, mode="lines", name="Ŷ (curva)", line=dict(width=2)))
         st.plotly_chart(fig, use_container_width=True)
 
         # Residuos
         resid = y - y_pred
-        fig_resid = px.scatter(x=y_pred, y=resid, labels={"x":"Ŷ", "y":"Residual"},
+        fig_resid = px.scatter(x=y_pred, y=resid, labels={"x":"Ŷ", "y":"Residual"},
                                title="Residuos vs Predicción")
         fig_resid.add_hline(y=0, line_dash="dot")
         st.plotly_chart(fig_resid, use_container_width=True)
@@ -432,32 +487,27 @@ if View == "Regresión No Lineal":
         st.error(f"Error durante el ajuste: {e}")
 
 
-
 ##########################################################################################
-# Contenido Vista 4
+# Vista 4
 if View == "Regresión Logística":
     st.title("Regresión Logística")
 
     # 1) Listas base: Y binaria y X numéricas
-    numeric_df = df.select_dtypes(include=['float', 'int'])
+    numeric_df = df.select_dtypes(include=['float', 'float64', 'int', 'int64'])
     Lista_num  = list(numeric_df.columns)
 
-    # Detectar dicotómicas (exactamente 2 valores no nulos)
-    # dico_cols = [c for c in df.columns if df[c].dropna().nunique() == 2]
+    # Detectar dicotómicas (exactamente 2 valores distintos, ignorando NaN)
     dico_cols = []
     for col in df.columns:
-        vals = df[col].unique()
+        vals = df[col].dropna().unique()
         if len(vals) == 2:
             dico_cols.append(col)
 
-    # Decidí hacerlo por selectbox, no fue una buena idea
-    #contA, contB = st.columns(2)
-    #with contA:
-    #    Variable_y = st.selectbox('Variable dependiente (Y, dicotómica)', options= dico_cols)
-    #with contB:
-    #    Variables_x = st.multiselect('Variables independientes (X)', options= Lista_num)
-
     # Sidebar
+    if len(dico_cols) == 0:
+        st.warning("No se detectaron variables binarias en el dataset.")
+        st.stop()
+
     Variable_y = st.sidebar.selectbox("Variable dependiente (Y, binaria)", options=dico_cols)
     Variables_x = st.sidebar.multiselect("Variables independientes (X, numéricas)", options=Lista_num)
 
@@ -489,18 +539,18 @@ if View == "Regresión Logística":
             X_test_s  = escalar.transform(X_test)
 
             # 4) Modelo
-            algoritmo = LogisticRegression()
+            algoritmo = LogisticRegression(max_iter=1000)
             algoritmo.fit(X_train_s, y_train)
 
             # 5) Probabilidades y predicción con umbral
             y_proba = algoritmo.predict_proba(X_test_s)[:, 1]
             y_pred  = (y_proba >= thr).astype(int)
 
-            # 6) Coeficientes
-            acc    = accuracy_score(y_test, y_pred) # exactitud
-            prec_c0 = precision_score(y_test, y_pred, pos_label=0, zero_division=0) # precisión
+            # 6) Métricas
+            acc    = accuracy_score(y_test, y_pred)
+            prec_c0 = precision_score(y_test, y_pred, pos_label=0, zero_division=0)
             prec_c1 = precision_score(y_test, y_pred, pos_label=1, zero_division=0)
-            rec_c0  = recall_score(y_test, y_pred, pos_label=0, zero_division=0) # sensibilidad
+            rec_c0  = recall_score(y_test, y_pred, pos_label=0, zero_division=0)
             rec_c1  = recall_score(y_test, y_pred, pos_label=1, zero_division=0)
             auc     = roc_auc_score(y_test, y_proba)
 
@@ -513,7 +563,7 @@ if View == "Regresión Logística":
             st.subheader("Métricas")
             st.dataframe(met_tab, use_container_width=True)
 
-            # 7) Coeficientes y Odds Ratios con nombres de variables
+            # 7) Coeficientes y Odds Ratios
             coef = algoritmo.coef_[0]
             intercepto = algoritmo.intercept_[0]
             coef_tab = pd.DataFrame({
@@ -521,12 +571,13 @@ if View == "Regresión Logística":
                 "Coeficiente (log-odds)": [intercepto] + list(coef),
                 "Odds Ratio (exp(coef))": [np.exp(intercepto)] + list(np.exp(coef))
             })
-            st.subheader("Coeficientes del modelo")
-            st.dataframe(coef_tab, use_container_width=True)
+            if not modo_presentacion:
+                st.subheader("Coeficientes del modelo")
+                st.dataframe(coef_tab, use_container_width=True)
 
             # 8) Matriz de confusión con etiquetas originales
             matriz = confusion_matrix(y_test, y_pred, labels=[0, 1])
-            labels_disp = [clases[0], clases[1]]  # orden consistente con mapping
+            labels_disp = [clases[0], clases[1]]
             fig_cm = go.Figure(data=go.Heatmap(
                 z=matriz,
                 x=[f"Pred {labels_disp[0]}", f"Pred {labels_disp[1]}"],
@@ -561,12 +612,11 @@ if View == "Regresión Logística":
             fig_roc.update_layout(title="Curva ROC", xaxis_title="FPR", yaxis_title="TPR")
             st.plotly_chart(fig_roc, use_container_width=True)
 
-            # 10) Probabilidades predichas por clase real + umbral
+            # 10) Probabilidades por clase real + umbral
             fig_prob = px.strip(
                 x=[labels_disp[i] for i in y_test], y=y_proba,
                 labels={"x":"Clase real", "y":"Probabilidad P(Y=1)"},
                 title="Distribución de probabilidades por clase real")
-
             fig_prob.add_hline(y=thr, line_dash="dot", annotation_text=f"Umbral {thr:.2f}")
             st.plotly_chart(fig_prob, use_container_width=True)
 
@@ -574,8 +624,17 @@ if View == "Regresión Logística":
             st.caption(f"Mapeo interno (solo para el modelo, sin modificar el dataset): "
                        f"{clases[0]} → 0, {clases[1]} → 1")
 
+
 ##########################################################################################
-# Personalización Dashboard
-
-
-
+# FOOTER / DISCLAIMER
+st.markdown("---")
+st.markdown(
+    """
+    <div class="air-footer">
+    © Proyecto para Gestión de proyectos. Este dashboard no
+    está afiliado ni respaldado oficialmente por Airbnb. Por Raymundo Díaz con ayuda de IA y profe Freddy.  
+    Construido con Streamlit, Plotly y Python.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
