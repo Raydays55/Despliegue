@@ -126,13 +126,12 @@ def load_data():
 # Carga de datos función 'load_data()'
 df, Lista = load_data()
 
-
 ##########
 # HERO HEADER (branding + KPIs)
 col_logo, col_title = st.columns([1,5], vertical_alignment="center")
 with col_logo:
     try:
-        st.image("assets/Logo.jpg", width=96)
+        st.image("assets/Logo.jpg", width=90)
     except Exception:
         st.write("🏠")
 with col_title:
@@ -146,13 +145,13 @@ with col_title:
 
 ##########
 # Sidebar con identidad
-st.sidebar.image("assets/Logo.jpg", use_container_width=True)
-st.sidebar.caption("Análisis exploratorio y modelos — **Airbnb Berlín**")
+st.sidebar.image("assets/Logo.jpg", use_container_width=True, width= 70)
+st.sidebar.caption("Análisis exploratorio y modelos)")
 st.sidebar.markdown("---")
 st.sidebar.title('Berlín, Alemania')
 
 # Toggle de modo “presentación” (oculta tablas largas)
-modo_presentacion = st.sidebar.toggle("Modo presentación (ocultar tablas)", value=False)
+modo_presentacion = st.sidebar.toggle("Modo presentación", value=False)
 
 # Menú de vistas
 View = st.sidebar.selectbox(
@@ -163,27 +162,26 @@ View = st.sidebar.selectbox(
 
 
 ##########################################################################################
-# CONTENIDO DE LA VISTA 1 — EXTRACCIÓN DE CARACTERÍSTICAS
+# Vista 1
 if View == "Extracción de Características":
-
     # KPIs
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown('<div class="air-card">', unsafe_allow_html=True)
-        st.metric("Registros", f"{len(df):,}")
+        st.metric("Filas", f"{len(df):,}")
         st.markdown('</div>', unsafe_allow_html=True)
     with col2:
         st.markdown('<div class="air-card">', unsafe_allow_html=True)
-        st.metric("Tipos de habitación", df['room_type'].nunique() if 'room_type' in df.columns else "—")
+        st.metric("Tipos de propiedad", df['property_type'].nunique() if 'property_type' in df.columns else "—")
         st.markdown('</div>', unsafe_allow_html=True)
     with col3:
         st.markdown('<div class="air-card">', unsafe_allow_html=True)
         med_price = np.nanmedian(df['price']) if 'price' in df.columns else np.nan
-        st.metric("Precio mediano", f"${med_price:,.0f}" if np.isfinite(med_price) else "—")
+        st.metric("Mediana de precio (€)", f"${med_price:,.0f}" if np.isfinite(med_price) else "—")
         st.markdown('</div>', unsafe_allow_html=True)
     with col4:
         st.markdown('<div class="air-card">', unsafe_allow_html=True)
-        superhosts = (df['host_is_superhost']==1).sum() if 'host_is_superhost' in df.columns else "—"
+        superhosts = (df['host_is_superhost']== 't').sum() if 'host_is_superhost' in df.columns else "—"
         st.metric("Superhosts", superhosts)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -207,7 +205,7 @@ if View == "Extracción de Características":
             x='categorias',
             y='frecuencia',
             color='categorias',
-            title=f"Frecuencia por categoría — {Variable_Cat}"
+            title=f"Frecuencia por categoría"
         )
         fig_bar.update_layout(height=400)
         st.plotly_chart(fig_bar, use_container_width=True)
@@ -218,7 +216,7 @@ if View == "Extracción de Características":
             Tabla_frecuencias,
             names='categorias',
             values='frecuencia',
-            title=f"Distribución porcentual — {Variable_Cat}"
+            title=f"Distribución porcentual"
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -226,13 +224,12 @@ if View == "Extracción de Características":
     Contenedor_C, Contenedor_D = st.columns(2)
 
     with Contenedor_C:
-        st.subheader("Visualización tipo dona")
+        st.subheader("Gráfico tipo anillo")
         fig_donut = px.pie(
             Tabla_frecuencias,
             names='categorias',
             values='frecuencia',
-            hole=0.5,
-            title=f"Gráfico de dona — {Variable_Cat}"
+            hole=0.5
         )
         st.plotly_chart(fig_donut, use_container_width=True)
 
@@ -242,7 +239,7 @@ if View == "Extracción de Características":
             Tabla_frecuencias.sort_values(by='frecuencia', ascending=False),
             x='categorias',
             y='frecuencia',
-            title=f"Tendencia de frecuencia — {Variable_Cat}"
+            title=f"Frecuencia"
         )
         st.plotly_chart(fig_area, use_container_width=True)
 
@@ -257,7 +254,7 @@ if View == "Extracción de Características":
             x=Variable_Cat,
             y='price',
             color=Variable_Cat,
-            title=f"Distribución de precios según {Variable_Cat}"
+            title=f"Distribución de precios según"
         )
         st.plotly_chart(fig_box, use_container_width=True)
     else:
@@ -265,7 +262,7 @@ if View == "Extracción de Características":
         heat_df = pd.crosstab(index=df[Variable_Cat], columns='count', normalize='columns') * 100
         fig_heat = px.imshow(
             heat_df, color_continuous_scale = CONT_GRADIENT,
-            title=f"Proporción por categoría — {Variable_Cat}",
+            title=f"Proporción por categoría",
             text_auto=".1f"
         )
         st.plotly_chart(fig_heat, use_container_width=True)
