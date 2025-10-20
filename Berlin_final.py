@@ -131,13 +131,13 @@ df, Lista = load_data()
 col_logo, col_title = st.columns([1,5], vertical_alignment="center")
 with col_logo:
     try:
-        st.image("assets/Logo.jpg", width=90)
+        st.image("assets/Logo3.jpg", width=90)
     except Exception:
         st.write("🏠")
 with col_title:
     st.markdown(
         """
-        # Airbnb — **Berlín**
+        # Airbnb — **Berlín, Alemania**
         <span style="color:#767676">Listados, precios y comportamiento de oferta</span>
         """,
         unsafe_allow_html=True
@@ -148,7 +148,7 @@ with col_title:
 st.sidebar.image("assets/Logo.jpg", use_container_width=True, width= 70)
 st.sidebar.caption("Análisis exploratorio y modelos)")
 st.sidebar.markdown("---")
-st.sidebar.title('Berlín, Alemania')
+#st.sidebar.title('Berlín, Alemania')
 
 # Toggle de modo “presentación” (oculta tablas largas)
 modo_presentacion = st.sidebar.toggle("Modo presentación", value=False)
