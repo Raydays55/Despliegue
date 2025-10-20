@@ -259,10 +259,10 @@ if View == "Regresión No Lineal":
     numeric_df = df.select_dtypes(include=['float','int']).copy()
     Lista_num = list(numeric_df.columns)
 
-    colL, colR = st.columns(2)
-    with colL:
+    contA, contB = st.columns(2)
+    with contA:
         Variable_y = st.selectbox("Variable objetivo (Y)", options=Lista_num, key="rnl_y_cf")
-    with colR:
+    with contB:
         Variable_x = st.selectbox("Variable independiente (X)", options=[c for c in Lista_num if c != Variable_y], key="rnl_x_cf")
 
     # Modelos disponibles
@@ -286,7 +286,7 @@ if View == "Regresión No Lineal":
         # a*exp(bx)+c
         return a * np.exp(-b * x) + c
 
-    def func_pow(x, a, b):
+    def func_pot(x, a, b):
         # a*x^b
         return a * np.power(x, b)
 
@@ -336,8 +336,8 @@ if View == "Regresión No Lineal":
             # Predicciones en todo el rango (para evitar potencias de x<=0, usamos clip pequeño)
             x_safe = np.clip(x, 1e-12, None)
             x_sorted_safe = np.clip(x_sorted, 1e-12, None)
-            y_pred = func_pow(x_safe, *pars)
-            y_line = func_pow(x_sorted_safe, *pars)
+            y_pred = func_pot(x_safe, *pars)
+            y_line = func_pot(x_sorted_safe, *pars)
             params_df = pd.DataFrame({"Parámetro": ["a", "b"], "Valor": pars})
 
         else:
@@ -392,9 +392,16 @@ if View == "Regresión Logística":
         if len(vals) == 2:
             dico_cols.append(col)
 
+    # Decidí hacerlo por selectbox
+    #contA, contB = st.columns(2)
+    #with contA:
+    #    Variable_y = st.selectbox('Variable dependiente (Y, dicotómica)', options= dico_cols)
+    #with contB:
+    #    Variables_x = st.multiselect('Variables independientes (X)', options= Lista_num)
+
     # Sidebar
     Variable_y = st.sidebar.selectbox("Variable dependiente (Y, binaria)", options=dico_cols)
-    Variables_x = st.sidebar.multiselect("Variables independientes (X, numéricas)", options=Lista_num,)
+    Variables_x = st.sidebar.multiselect("Variables independientes (X, numéricas)", options=Lista_num)
 
     # Sliders
     test_size = st.sidebar.slider("Tamaño de prueba", 0.1, 0.5, 0.30, 0.05)
