@@ -549,23 +549,7 @@ if View == "Regresión Logística":
             mapping = {clases[0]: 0, clases[1]: 1}  # mantiene nombres originales para mostrar
             y = y_raw.map(mapping).values
 
-            # 3) Split + escalado
-        from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
-                                    roc_auc_score, roc_curve, precision_recall_curve,
-                                    average_precision_score, balanced_accuracy_score,               confusion_matrix)
-        from sklearn.linear_model import LogisticRegression
-        from sklearn.preprocessing import StandardScaler
-        from sklearn.model_selection import train_test_split
-        import numpy as np
-        import pandas as pd
-        import plotly.graph_objs as go
-        import plotly.express as px
-
-        # Opcional (si usas re-muestreo):
-        from imblearn.over_sampling import SMOTE
-        from imblearn.under_sampling import RandomUnderSampler
-
-        # === Dentro de tu View "Regresión Logística", tras preparar X, y, y clases ===
+        # 3) Split + escalado        
         # Sidebar extra: manejo de desbalance y estrategia de umbral
         st.sidebar.markdown("### Manejo de desbalance")
         imb_method = st.sidebar.selectbox("Método", ["Ninguno",
@@ -687,10 +671,10 @@ if View == "Regresión Logística":
         # Alertas útiles
         prev = y_test.mean()
         if prec_c1 == 1.0 and rec_c1 < 0.15:
-            st.warning("⚠️ La precisión de la clase minoritaria es 1.0 pero el recall es muy bajo. "
+            st.warning("La precisión de la clase minoritaria es 1.0 pero el recall es muy bajo. "
                     "Baja el umbral, usa class_weight='balanced' o aplica re-muestreo.")
         if acc > 0.9 and bacc < 0.65 and prev < 0.25:
-            st.info("ℹ️ La exactitud es alta por el desbalance. Revisa balanced accuracy, AUPRC y F1 de la minoritaria.")
+            st.info("La exactitud es alta por el desbalance. Revisa balanced accuracy, AUPRC y F1 de la minoritaria.")
 
         # 7) Coeficientes y Odds Ratios (sin cambios)
         coef = algoritmo.coef_[0]
