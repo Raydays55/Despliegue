@@ -17,7 +17,7 @@ from scipy import stats
 from sklearn.metrics import (
     r2_score, mean_absolute_error, mean_squared_error,
     confusion_matrix, accuracy_score, precision_score,
-    recall_score, roc_auc_score, roc_curve, classification_report
+    recall_score, roc_auc_score, roc_curve, classification_report, f1_score, precision_recall_curve, average_precision_score, balanced_accuracy_score
 )
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -27,6 +27,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
+
+from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import RandomUnderSampler
 
 ##########
 # Configuración global
@@ -397,7 +400,7 @@ if View == "Regresión No Lineal":
 
     contA, contB = st.columns(2)
     with contA:
-        Variable_y = st.selectbox("Variable objetivo (Y)", options=Lista_num, key="rnl_y_cf")
+        Variable_y = st.selectbox("Variable dependiente (Y)", options=Lista_num, key="rnl_y_cf")
     with contB:
         Variable_x = st.selectbox("Variable independiente (X)", options=[c for c in Lista_num if c != Variable_y], key="rnl_x_cf")
 
@@ -547,98 +550,210 @@ if View == "Regresión Logística":
             y = y_raw.map(mapping).values
 
             # 3) Split + escalado
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=42, stratify=y
-            )
-            escalar = StandardScaler()
-            X_train_s = escalar.fit_transform(X_train)
-            X_test_s  = escalar.transform(X_test)
+        from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score,
+                                    roc_auc_score, roc_curve, precision_recall_curve,
+                                    average_precision_score, balanced_accuracy_score,               confusion_matrix)
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.model_selection import train_test_split
+        import numpy as np
+        import pandas as pd
+        import plotly.graph_objs as go
+        import plotly.express as px
 
-            # 4) Modelo
+        # Opcional (si usas re-muestreo):
+        from imblearn.over_sampling import SMOTE
+        from imblearn.under_sampling import RandomUnderSampler
+
+        # === Dentro de tu View "Regresión Logística", tras preparar X, y, y clases ===
+        # Sidebar extra: manejo de desbalance y estrategia de umbral
+        st.sidebar.markdown("### Manejo de desbalance")
+        imb_method = st.sidebar.selectbox("Método", ["Ninguno",
+                                                    "class_weight='balanced'",
+                                                    "SMOTE (over-sampling)",
+                                                    "Under-sampling"])
+
+        st.sidebar.markdown("### Estrategia de umbral")
+        thr_mode = st.sidebar.selectbox("Seleccionar umbral por…",
+                                        ["Manual", "F1 óptimo", "Minimizar costo", "Maximizar recall con precisión mínima"])
+        prec_min = None
+        c_fp = None
+        c_fn = None
+        if thr_mode == "Manual":
+            thr = st.sidebar.slider("Umbral de clasificación", 0.01, 0.99, thr, 0.01)
+        elif thr_mode == "Maximizar recall con precisión mínima":
+            prec_min = st.sidebar.slider("Precisión mínima requerida", 0.1, 0.99, 0.6, 0.01)
+        elif thr_mode == "Minimizar costo":
+            # Ajusta estos valores a tu caso: p. ej., FP=10,000; FN=80,000 (como has usado antes)
+            c_fp = st.sidebar.number_input("Costo por FP", min_value=0, value=10000, step=1000)
+            c_fn = st.sidebar.number_input("Costo por FN", min_value=0, value=80000, step=1000)
+
+        # 3) Split + escalado
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=42, stratify=y
+        )
+        escalar = StandardScaler()
+        X_train_s = escalar.fit_transform(X_train)
+        X_test_s  = escalar.transform(X_test)
+
+        # 3.1) Re-muestreo (solo sobre el set de entrenamiento ya escalado)
+        if imb_method == "SMOTE (over-sampling)":
+            sm = SMOTE(random_state=42)
+            X_train_s, y_train = sm.fit_resample(X_train_s, y_train)
+        elif imb_method == "Under-sampling":
+            rus = RandomUnderSampler(random_state=42)
+            X_train_s, y_train = rus.fit_resample(X_train_s, y_train)
+
+        # 4) Modelo (class_weight según selección)
+        if imb_method == "class_weight='balanced'":
+            algoritmo = LogisticRegression(max_iter=1000, class_weight='balanced')
+        else:
             algoritmo = LogisticRegression(max_iter=1000)
-            algoritmo.fit(X_train_s, y_train)
 
-            # 5) Probabilidades y predicción con umbral
-            y_proba = algoritmo.predict_proba(X_test_s)[:, 1]
-            y_pred  = (y_proba >= thr).astype(int)
+        algoritmo.fit(X_train_s, y_train)
 
-            # 6) Métricas
-            acc    = accuracy_score(y_test, y_pred)
-            prec_c0 = precision_score(y_test, y_pred, pos_label=0, zero_division=0)
-            prec_c1 = precision_score(y_test, y_pred, pos_label=1, zero_division=0)
-            rec_c0  = recall_score(y_test, y_pred, pos_label=0, zero_division=0)
-            rec_c1  = recall_score(y_test, y_pred, pos_label=1, zero_division=0)
-            auc     = roc_auc_score(y_test, y_proba)
+        # 5) Probabilidades y selección de umbral
+        y_proba = algoritmo.predict_proba(X_test_s)[:, 1]
 
-            met_tab = pd.DataFrame({
-                "Métrica": ["Exactitud", f"Precision ({clases[0]})", f"Precision ({clases[1]})",
-                            f"Sensibilidad ({clases[0]})", f"Sensibilidad ({clases[1]})", "ROC-AUC", "Umbral"],
-                "Valor":   [acc,         prec_c0,                   prec_c1,
-                            rec_c0,                  rec_c1,                  auc,      thr]
-            })
-            st.subheader("Métricas")
-            st.dataframe(met_tab, use_container_width=True)
+        def pick_threshold_by_f1(y_true, y_score):
+            p, r, th = precision_recall_curve(y_true, y_score)
+            f1 = 2 * (p*r) / np.clip(p+r, 1e-12, None)
+            # precision_recall_curve devuelve umbrales len-1 respecto a p/r
+            best_idx = np.nanargmax(f1[:-1])
+            return th[best_idx], f1[best_idx], p[best_idx], r[best_idx]
 
-            # 7) Coeficientes y Odds Ratios
-            coef = algoritmo.coef_[0]
-            intercepto = algoritmo.intercept_[0]
-            coef_tab = pd.DataFrame({
-                "Variable": ["Intercepto"] + Variables_x,
-                "Coeficiente (log-odds)": [intercepto] + list(coef),
-                "Odds Ratio (exp(coef))": [np.exp(intercepto)] + list(np.exp(coef))
-            })
-            if not modo_presentacion:
-                st.subheader("Coeficientes del modelo")
-                st.dataframe(coef_tab, use_container_width=True)
+        def pick_threshold_by_cost(y_true, y_score, c_fp, c_fn):
+            # Recorremos 1001 umbrales uniformes
+            ths = np.linspace(0.0, 1.0, 1001)
+            best_th, best_cost = 0.5, np.inf
+            for t in ths:
+                y_pred = (y_score >= t).astype(int)
+                tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+                cost = fp * c_fp + fn * c_fn
+                if cost < best_cost:
+                    best_cost, best_th = cost, t
+            return best_th, best_cost
 
-            # 8) Matriz de confusión con etiquetas originales
-            matriz = confusion_matrix(y_test, y_pred, labels=[0, 1])
-            labels_disp = [clases[0], clases[1]]
-            fig_cm = go.Figure(data=go.Heatmap(
-                z=matriz,
-                x=[f"Pred {labels_disp[0]}", f"Pred {labels_disp[1]}"],
-                y=[f"Real {labels_disp[0]}", f"Real {labels_disp[1]}"],
-                colorscale="Oranges", showscale=True, hoverongaps=False
-            ))
-            ann = []
-            tags = np.array([["TN","FP"],["FN","TP"]])
-            for i in range(2):
-                for j in range(2):
-                    ann.append(dict(
-                        x=[f"Pred {labels_disp[0]}", f"Pred {labels_disp[1]}"][j],
-                        y=[f"Real {labels_disp[0]}", f"Real {labels_disp[1]}"][i],
-                        text=f"{tags[i,j]}: {matriz[i,j]}",
-                        showarrow=False,
-                        font=dict(color="white" if matriz[i,j] > matriz.max()/2 else "black")
-                    ))
-            fig_cm.update_layout(
-                title="Matriz de confusión",
-                annotations=ann,
-                width=520, height=520
-            )
-            st.plotly_chart(fig_cm, use_container_width=False)
+        def pick_threshold_by_recall_with_prec_min(y_true, y_score, prec_min=0.6):
+            p, r, th = precision_recall_curve(y_true, y_score)
+            # p/r len N, th len N-1. Usamos índices de th.
+            valid = np.where(p[:-1] >= prec_min)[0]
+            if len(valid) == 0:
+                return 0.5, 0.0, 0.0  # fallback
+            # entre los que cumplen precisión mínima, elegimos el de mayor recall
+            best_idx = valid[np.argmax(r[valid])]
+            return th[best_idx], r[best_idx], p[best_idx]
 
-            # 9) Curva ROC
-            fpr, tpr, _ = roc_curve(y_test, y_proba)
-            fig_roc = go.Figure()
-            fig_roc.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines",
-                                         name=f"ROC (AUC={auc:.3f})"))
-            fig_roc.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines",
-                                         name="Aleatorio", line=dict(dash="dot")))
-            fig_roc.update_layout(title="Curva ROC", xaxis_title="FPR", yaxis_title="TPR")
-            st.plotly_chart(fig_roc, use_container_width=True)
+        # Elegimos umbral según estrategia
+        if thr_mode == "F1 óptimo":
+            thr, best_f1, best_p, best_r = pick_threshold_by_f1(y_test, y_proba)
+        elif thr_mode == "Minimizar costo":
+            thr, best_cost = pick_threshold_by_cost(y_test, y_proba, c_fp, c_fn)
+        elif thr_mode == "Maximizar recall con precisión mínima":
+            thr, best_r, best_p = pick_threshold_by_recall_with_prec_min(y_test, y_proba, prec_min=prec_min)
+        # Si es "Manual", ya viene de la sidebar
 
-            # 10) Probabilidades por clase real + umbral
-            fig_prob = px.strip(
-                x=[labels_disp[i] for i in y_test], y=y_proba,
-                labels={"x":"Clase real", "y":"Probabilidad P(Y=1)"},
-                title="Distribución de probabilidades por clase real")
-            fig_prob.add_hline(y=thr, line_dash="dot", annotation_text=f"Umbral {thr:.2f}")
-            st.plotly_chart(fig_prob, use_container_width=True)
+        y_pred = (y_proba >= thr).astype(int)
 
-            # Nota informativa del mapeo (sin alterar df)
-            st.caption(f"Mapeo interno (solo para el modelo, sin modificar el dataset): "
-                       f"{clases[0]} → 0, {clases[1]} → 1")
+        # 6) Métricas ampliadas
+        acc     = accuracy_score(y_test, y_pred)
+        bacc    = balanced_accuracy_score(y_test, y_pred)
+        prec_c0 = precision_score(y_test, y_pred, pos_label=0, zero_division=0)
+        prec_c1 = precision_score(y_test, y_pred, pos_label=1, zero_division=0)
+        rec_c0  = recall_score(y_test, y_pred, pos_label=0, zero_division=0)
+        rec_c1  = recall_score(y_test, y_pred, pos_label=1, zero_division=0)
+        f1_min  = f1_score(y_test, y_pred, pos_label=1, zero_division=0)  # F1 de la minoritaria (etiqueta 1)
+        auc     = roc_auc_score(y_test, y_proba)
+        auprc   = average_precision_score(y_test, y_proba)  # área bajo curva Prec-Recall (clase 1)
+
+        # Tabla de métricas
+        met_rows = [
+            ("Exactitud", acc),
+            ("Balanced accuracy", bacc),
+            (f"Precision ({clases[0]})", prec_c0),
+            (f"Precision ({clases[1]})", prec_c1),
+            (f"Sensibilidad ({clases[0]})", rec_c0),
+            (f"Sensibilidad ({clases[1]})", rec_c1),
+            (f"F1 ({clases[1]})", f1_min),
+            ("ROC-AUC", auc)
+        ]
+        if thr_mode == "Minimizar costo":
+            met_rows.append(("Costo total (FP/FN)", best_cost))
+
+        met_tab = pd.DataFrame(met_rows, columns=["Métrica", "Valor"])
+        st.subheader("Métricas")
+        st.dataframe(met_tab, use_container_width=True)
+
+        # Alertas útiles
+        prev = y_test.mean()
+        if prec_c1 == 1.0 and rec_c1 < 0.15:
+            st.warning("⚠️ La precisión de la clase minoritaria es 1.0 pero el recall es muy bajo. "
+                    "Baja el umbral, usa class_weight='balanced' o aplica re-muestreo.")
+        if acc > 0.9 and bacc < 0.65 and prev < 0.25:
+            st.info("ℹ️ La exactitud es alta por el desbalance. Revisa balanced accuracy, AUPRC y F1 de la minoritaria.")
+
+        # 7) Coeficientes y Odds Ratios (sin cambios)
+        coef = algoritmo.coef_[0]
+        intercepto = algoritmo.intercept_[0]
+        coef_tab = pd.DataFrame({
+            "Variable": ["Intercepto"] + Variables_x,
+            "Coeficiente (log-odds)": [intercepto] + list(coef),
+            "Odds Ratio (exp(coef))": [np.exp(intercepto)] + list(np.exp(coef))
+        })
+        if not modo_presentacion:
+            st.subheader("Coeficientes del modelo")
+            st.dataframe(coef_tab, use_container_width=True)
+
+        # 8) Matriz de confusión (igual que ya tenías)
+        matriz = confusion_matrix(y_test, y_pred, labels=[0, 1])
+        labels_disp = [clases[0], clases[1]]
+        fig_cm = go.Figure(data=go.Heatmap(
+            z=matriz,
+            x=[f"Pred {labels_disp[0]}", f"Pred {labels_disp[1]}"],
+            y=[f"Real {labels_disp[0]}", f"Real {labels_disp[1]}"],
+            colorscale="Oranges", showscale=True, hoverongaps=False
+        ))
+        ann = []
+        tags = np.array([["TN","FP"],["FN","TP"]])
+        for i in range(2):
+            for j in range(2):
+                ann.append(dict(
+                    x=[f"Pred {labels_disp[0]}", f"Pred {labels_disp[1]}"][j],
+                    y=[f"Real {labels_disp[0]}", f"Real {labels_disp[1]}"][i],
+                    text=f"{tags[i,j]}: {matriz[i,j]}",
+                    showarrow=False,
+                    font=dict(color="white" if matriz[i,j] > matriz.max()/2 else "black")
+                ))
+        fig_cm.update_layout(title="Matriz de confusión", annotations=ann, width=520, height=520)
+        st.plotly_chart(fig_cm, use_container_width=False)
+
+        # 9) Curva ROC (igual)
+        fpr, tpr, _ = roc_curve(y_test, y_proba)
+        fig_roc = go.Figure()
+        fig_roc.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines", name=f"ROC (AUC={auc:.3f})"))
+        fig_roc.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines", name="Aleatorio", line=dict(dash="dot")))
+        fig_roc.update_layout(title="Curva ROC", xaxis_title="FPR", yaxis_title="TPR")
+        st.plotly_chart(fig_roc, use_container_width=True)
+
+        # 10) Curva Precisión-Recall y distribución de probabilidades
+        p, r, th = precision_recall_curve(y_test, y_proba)
+        fig_pr = go.Figure()
+        fig_pr.add_trace(go.Scatter(x=r, y=p, mode="lines", name=f"PR (AP={auprc:.3f})"))
+        fig_pr.update_layout(title="Curva Precisión-Recall (clase 1)",
+                            xaxis_title="Recall", yaxis_title="Precisión")
+        st.plotly_chart(fig_pr, use_container_width=True)
+
+        fig_prob = px.strip(
+            x=[labels_disp[i] for i in y_test], y=y_proba,
+            labels={"x":"Clase real", "y":"Probabilidad P(Y=1)"},
+            title="Distribución de probabilidades por clase real"
+        )
+        fig_prob.add_hline(y=thr, line_dash="dot", annotation_text=f"Umbral {thr:.2f}")
+        st.plotly_chart(fig_prob, use_container_width=True)
+
+        # Nota de mapeo (como ya tenías)
+        st.caption(f"Mapeo interno (solo para el modelo): {clases[0]} → 0, {clases[1]} → 1. "
+                f"Prevalencia clase 1 (test): {prev:.3f}")
 
 
 ##########################################################################################
