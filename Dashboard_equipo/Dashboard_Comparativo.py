@@ -160,16 +160,22 @@ def kpis_block(df, country):
         st.metric(f"{country} · Superhosts", superhosts)
         st.markdown('</div>', unsafe_allow_html=True)
 
-def extraction_tables_and_figs(df, var_cat: str):
+def extraction_charts(df, var_cat: str):
     tabla = df[var_cat].value_counts(dropna=False).reset_index().head(10)
     tabla.columns = ['categorias','frecuencia']
-    fig_bar = px.bar(tabla, x='categorias', y='frecuencia', color='categorias', title=None)
-    fig_pie = px.pie(tabla, names='categorias', values='frecuencia', title=None)
-    fig_donut = px.pie(tabla, names='categorias', values='frecuencia', hole=0.5, title=None)
-    fig_area = px.area(tabla.sort_values('frecuencia', ascending=False), x='categorias', y='frecuencia', title=None)
-    heat_df = pd.crosstab(index=df[var_cat], columns='count', normalize='columns') * 100
-    fig_heat = px.imshow(heat_df, color_continuous_scale=CONT_GRADIENT, title=None)
-    return tabla, fig_bar, fig_pie, fig_donut, fig_area, fig_heat
+    fig_bar = px.bar(tabla, x='categorias', y='frecuencia', color='categorias', title="Distribución por categoría")
+    fig_pie = px.pie(tabla, names='categorias', values='frecuencia', title="Proporción por categoría")
+    fig_donut = px.pie(tabla, names='categorias', values='frecuencia', hole=0.5, title="Gráfico tipo anillo")
+    fig_area = px.area(tabla.sort_values('frecuencia', ascending=False),
+                       x='categorias', y='frecuencia', title="Tendencia acumulada (Área)")
+    # Detalle: box/heatmap según exista price
+    detail_fig = None
+    if var_cat in ['room_type','property_type','price_cat'] and 'price' in df.columns:
+        detail_fig = px.box(df, x=var_cat, y='price', color=var_cat, title="Relación categorías vs precio (Boxplot)")
+    else:
+        heat_df = pd.crosstab(index=df[var_cat], columns='count', normalize='columns') * 100
+        detail_fig = px.imshow(heat_df, color_continuous_scale=CONT_GRADIENT, title="Proporción por categoría (Heatmap)")
+    return tabla, fig_bar, fig_pie, fig_donut, fig_area, detail_fig
 
 def gallery_block(country):
     st.markdown(f"**Galería:** {country} — Airbnb")
@@ -183,122 +189,85 @@ def gallery_block(country):
                 st.write("🖼️ Imagen no encontrada")
 
 def get_common_lists(dfs_dict):
-    num_sets, bin_sets, cat_sets = [], [], []
+    # Intersección de columnas numéricas y binarias para logística / extracción
+    num_sets = []
+    bin_sets = []
+    cat_sets = []
     for _, df in dfs_dict.items():
         num_cols = set(df.select_dtypes(include=['float','float64','int','int64']).columns.tolist())
+        # binarias: exactamente 2 valores (ignorando NaN)
         bin_cols = set([c for c in df.columns if df[c].dropna().nunique()==2])
+        # categóricas candidatas (object o categóricas + algunas conocidas)
         cat_cols = set([c for c in df.columns if df[c].dtype=='object' or df[c].dtype.name=='category'])
+        # agrega columnas 'conocidas' aunque sean numéricas codificadas
         cat_cols |= set([c for c in ['room_type','property_type','price_cat','host_response_time'] if c in df.columns])
-        num_sets.append(num_cols); bin_sets.append(bin_cols); cat_sets.append(cat_cols)
+        num_sets.append(num_cols)
+        bin_sets.append(bin_cols)
+        cat_sets.append(cat_cols)
     common_num = set.intersection(*num_sets) if num_sets else set()
     common_bin = set.intersection(*bin_sets) if bin_sets else set()
     common_cat = set.intersection(*cat_sets) if cat_sets else set()
+    # excluir target obvios de num si molestan
     return sorted(list(common_num)), sorted(list(common_bin)), sorted(list(common_cat))
 
-def run_logistic_block(df, y_col, x_cols, thr_mode="Manual", thr=0.5, c_fp=10000, c_fn=80000,
-                       prec_min=0.6, test_size=0.30, imb_method="Ninguno"):
-    # Asegura que y_col sea un string escalar
-    if not isinstance(y_col, str):
-        if isinstance(y_col, (list, tuple, np.ndarray)) and len(y_col) > 0:
-            y_col = y_col[0]
-        else:
-            y_col = str(y_col)
-
-    # Evita que Y esté en X (por si el usuario la seleccionó por error)
-    x_cols = [x for x in x_cols if x != y_col]
-
-    # Si por esta limpieza te quedas sin X, aborta con None
-    if len(x_cols) == 0:
-        return None
-
-    # Construye base y fuerza Series para Y (no DataFrame)
+def run_logistic_block(df, y_col, x_cols, thr_mode="Manual", thr=0.5, c_fp=10000, c_fn=80000, prec_min=0.6, test_size=0.30, imb_method="Ninguno"):
     base = df[x_cols + [y_col]].copy()
-    y_obj = base[y_col]
-    if isinstance(y_obj, pd.DataFrame):
-        # Si por alguna razón llega como DF (p.ej. columnas duplicadas), toma la primera
-        y_obj = y_obj.iloc[:, 0]
-
-    # Obtén clases de Y (exactamente dos)
-    vals = pd.Series(y_obj).dropna().astype(object).unique().tolist()
+    vals = base[y_col].dropna().unique().tolist()
     if len(vals) != 2:
         return None
-
-    # Mapeo a {0,1} preservando el orden de aparición
-    mapping = {vals[0]: 0, vals[1]: 1}
-    base['__y__'] = y_obj.map(mapping)
-
-    # Limpieza de NaN/Inf
-    base = base.replace([np.inf, -np.inf], np.nan).dropna(subset=x_cols + ['__y__'])
+    mapping = {vals[0]:0, vals[1]:1}
+    base['__y__'] = base[y_col].map(mapping)
+    base = base.replace([np.inf,-np.inf], np.nan).dropna(subset=x_cols + ['__y__'])
     if base['__y__'].nunique() < 2:
         return None
-
     X = base[x_cols].astype(float).to_numpy()
     y = base['__y__'].to_numpy(dtype=int)
-
-    # Split + escala
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=42, stratify=y
-    )
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42, stratify=y)
     scaler = StandardScaler()
     X_train_s = scaler.fit_transform(X_train)
     X_test_s  = scaler.transform(X_test)
-
-    # Re-muestreo
     if imb_method == "SMOTE (over-sampling)":
-        sm = SMOTE(random_state=42)
-        X_train_s, y_train = sm.fit_resample(X_train_s, y_train)
+        sm = SMOTE(random_state=42); X_train_s, y_train = sm.fit_resample(X_train_s, y_train)
     elif imb_method == "Under-sampling":
-        rus = RandomUnderSampler(random_state=42)
-        X_train_s, y_train = rus.fit_resample(X_train_s, y_train)
-
-    # Modelo
+        rus = RandomUnderSampler(random_state=42); X_train_s, y_train = rus.fit_resample(X_train_s, y_train)
     if imb_method == "class_weight='balanced'":
         clf = LogisticRegression(max_iter=1000, class_weight='balanced')
     else:
         clf = LogisticRegression(max_iter=1000)
     clf.fit(X_train_s, y_train)
+    y_proba = clf.predict_proba(X_test_s)[:,1]
 
-    # Probabilidades
-    y_proba = clf.predict_proba(X_test_s)[:, 1]
-
-    # Selectores de umbral
     def pick_threshold_by_f1(y_true, y_score):
         p, r, th = precision_recall_curve(y_true, y_score)
-        f1 = 2 * (p * r) / np.clip(p + r, 1e-12, None)
+        f1 = 2*(p*r)/np.clip(p+r, 1e-12, None)
         best_idx = np.nanargmax(f1[:-1])
         return th[best_idx]
-
     def pick_threshold_by_cost(y_true, y_score, c_fp, c_fn):
-        ths = np.linspace(0.0, 1.0, 1001)
+        ths = np.linspace(0.0,1.0,1001)
         best_th, best_cost = 0.5, np.inf
         for t in ths:
-            y_pred = (y_score >= t).astype(int)
+            y_pred = (y_score>=t).astype(int)
             tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-            cost = fp * c_fp + fn * c_fn
+            cost = fp*c_fp + fn*c_fn
             if cost < best_cost:
                 best_cost, best_th = cost, t
         return best_th
-
     def pick_threshold_by_recall_with_prec_min(y_true, y_score, prec_min=0.6):
         p, r, th = precision_recall_curve(y_true, y_score)
         valid = np.where(p[:-1] >= prec_min)[0]
-        if len(valid) == 0:
-            return 0.5
+        if len(valid)==0: return 0.5
         best_idx = valid[np.argmax(r[valid])]
         return th[best_idx]
 
-    # Determina umbral
-    if thr_mode == "F1 óptimo":
+    if thr_mode=="F1 óptimo":
         thr = pick_threshold_by_f1(y_test, y_proba)
-    elif thr_mode == "Minimizar costo":
+    elif thr_mode=="Minimizar costo":
         thr = pick_threshold_by_cost(y_test, y_proba, c_fp, c_fn)
-    elif thr_mode == "Maximizar recall con precisión mínima":
+    elif thr_mode=="Maximizar recall con precisión mínima":
         thr = pick_threshold_by_recall_with_prec_min(y_test, y_proba, prec_min=prec_min)
-    # si es Manual, se respeta el thr que viene
+    # Manual: se respeta valor de thr
 
-    y_pred = (y_proba >= thr).astype(int)
-
-    # Métricas
+    y_pred = (y_proba>=thr).astype(int)
     acc   = accuracy_score(y_test, y_pred)
     bacc  = balanced_accuracy_score(y_test, y_pred)
     prec1 = precision_score(y_test, y_pred, pos_label=1, zero_division=0)
@@ -306,7 +275,7 @@ def run_logistic_block(df, y_col, x_cols, thr_mode="Manual", thr=0.5, c_fp=10000
     f1m   = f1_score(y_test, y_pred, pos_label=1, zero_division=0)
     auc   = roc_auc_score(y_test, y_proba)
     auprc = average_precision_score(y_test, y_proba)
-    cm    = confusion_matrix(y_test, y_pred, labels=[0, 1])
+    cm    = confusion_matrix(y_test, y_pred, labels=[0,1])
 
     # Figuras
     labels_disp = [list(mapping.keys())[0], list(mapping.keys())[1]]
@@ -340,16 +309,21 @@ def run_logistic_block(df, y_col, x_cols, thr_mode="Manual", thr=0.5, c_fp=10000
     fig_pr.add_trace(go.Scatter(x=r, y=p, mode="lines", name=f"PR (AP={auprc:.3f})"))
     fig_pr.update_layout(title="Curva Precisión-Recall (clase 1)", xaxis_title="Recall", yaxis_title="Precisión")
 
+    fig_prob = px.strip(
+        x=[labels_disp[i] for i in y_test], y=y_proba,
+        labels={"x":"Clase real", "y":"Probabilidad P(Y=1)"},
+        title="Distribución de probabilidades por clase real"
+    )
+    fig_prob.add_hline(y=thr, line_dash="dot", annotation_text=f"Umbral {thr:.2f}")
+
     met_tab = pd.DataFrame({
         "Métrica": ["Exactitud","Balanced accuracy","Precisión (1)","Recall (1)","F1 (1)","ROC-AUC","AP (PR)"],
         "Valor":   [acc, bacc, prec1, rec1, f1m, auc, auprc]
     })
-
     return dict(
-        metrics=met_tab, cm_fig=fig_cm, roc_fig=fig_roc, pr_fig=fig_pr,
+        metrics=met_tab, cm_fig=fig_cm, roc_fig=fig_roc, pr_fig=fig_pr, prob_fig=fig_prob,
         thr=thr, mapping=mapping
     )
-
 
 # Carga inicial
 df, Lista = load_country_df("Alemania")
@@ -380,7 +354,7 @@ View = st.sidebar.selectbox(
 )
 
 ##########################################################################################
-# Vista 1 — Extracción de características (individual)
+# Vista 1 — Extracción de características
 if View == "Extracción de Características":
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -433,10 +407,17 @@ if View == "Extracción de Características":
         st.plotly_chart(fig_area, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("Proporción por categoría (Heatmap)")
-    heat_df = pd.crosstab(index=df[Variable_Cat], columns='count', normalize='columns') * 100
-    fig_heat = px.imshow(heat_df, color_continuous_scale=CONT_GRADIENT, title="Proporción por categoría")
-    st.plotly_chart(fig_heat, use_container_width=True)
+    st.subheader("Análisis más profundo")
+
+    if Variable_Cat in ['room_type', 'property_type', 'price_cat'] and 'price' in df.columns:
+        st.write("**Relación entre categorías y precio (Boxplot):**")
+        fig_box = px.box(df, x=Variable_Cat, y='price', color=Variable_Cat)
+        st.plotly_chart(fig_box, use_container_width=True)
+    else:
+        st.write("**Heatmap de proporciones:**")
+        heat_df = pd.crosstab(index=df[Variable_Cat], columns='count', normalize='columns') * 100
+        fig_heat = px.imshow(heat_df, color_continuous_scale=CONT_GRADIENT, title="Proporción por categoría")
+        st.plotly_chart(fig_heat, use_container_width=True)
 
     if not modo_presentacion:
         st.markdown("---")
@@ -446,7 +427,7 @@ if View == "Extracción de Características":
     gallery_block(country)
 
 ##########################################################################################
-# Vista 2 — Regresión Lineal (individual)
+# Vista 2 — Regresión Lineal
 if View == "Regresión Lineal":
     st.title("Regresión Lineal")
 
@@ -471,6 +452,7 @@ if View == "Regresión Lineal":
     model.fit(X, y)
     y_pred = model.predict(X)
 
+    r2 = r2_score(y, y_pred)
     coef_Deter_simple = model.score(X= X, y= y)
     coef_Correl_simple = np.sqrt(abs(coef_Deter_simple))
 
@@ -486,11 +468,15 @@ if View == "Regresión Lineal":
 
     fig_scat = px.scatter(numeric_df, x=Variable_x, y=Variable_y, opacity=0.6, title="Dispersión y recta ajustada")
     order_idx = np.argsort(X[:, 0])
-    fig_scat.add_trace(go.Scatter(x=X[order_idx, 0], y=y_pred[order_idx], mode="lines", name="Predicción de Y"))
+    fig_scat.add_trace(go.Scatter(
+        x=X[order_idx, 0], y=y_pred[order_idx],
+        mode="lines", name="Predicción de Y"
+    ))
     st.plotly_chart(fig_scat, use_container_width=True)
 
     resid = y - y_pred
-    fig_res = px.scatter(x=y_pred, y=resid, labels={"x":"Ŷ", "y":"Residual"}, title="Residuos vs Predicción (diagnóstico)")
+    fig_res = px.scatter(x=y_pred, y=resid, labels={"x":"Ŷ", "y":"Residual"},
+                         title="Residuos vs Predicción (diagnóstico)")
     fig_res.add_hline(y=0, line_dash="dot")
     st.plotly_chart(fig_res, use_container_width=True)
 
@@ -534,7 +520,7 @@ if View == "Regresión Lineal":
         st.info("Selecciona al menos 1 variable para el modelo múltiple.")
 
 ##########################################################################################
-# Vista 3 — Regresión No Lineal (individual)
+# Vista 3 — Regresión No Lineal
 if View == "Regresión No Lineal":
     st.title("Regresión No Lineal")
 
@@ -621,7 +607,7 @@ if View == "Regresión No Lineal":
         st.error(f"Error durante el ajuste: {e}")
 
 ##########################################################################################
-# Vista 4 — Regresión Logística (individual)
+# Vista 4 — Regresión Logística
 if View == "Regresión Logística":
     st.title("Regresión Logística")
 
@@ -774,7 +760,8 @@ if View == "Regresión Logística":
             y=[f"Real {labels_disp[0]}", f"Real {labels_disp[1]}"],
             colorscale="Oranges", showscale=True, hoverongaps=False
         ))
-        ann = []; tags = np.array([["TN","FP"],["FN","TP"]])
+        ann = []
+        tags = np.array([["TN","FP"],["FN","TP"]])
         for i in range(2):
             for j in range(2):
                 ann.append(dict(
@@ -811,39 +798,29 @@ if View == "Regresión Logística":
         st.caption(f"Mapeo interno (solo para el modelo): {clases[0]} → 0, {clases[1]} → 1. Prevalencia clase 1 (test): {prev:.3f}")
 
 ##########################################################################################
-# Vista 5 — COMPARAR PAÍSES (Mejorada)
+# Vista 5 — COMPARAR PAÍSES (Nueva)
 if View == "Comparar países":
     st.title("Comparación de países (Alemania · Valencia · Estocolmo · México)")
     st.caption("Misma métrica y visual por país, en una sola vista.")
 
     # Cargar todos los países
     dfs = {}
+    listas_cat = {}
     for c in COUNTRY_FILES.keys():
-        dfi, _ = load_country_df(c)
+        dfi, Li = load_country_df(c)
         dfs[c] = dfi
+        listas_cat[c] = set(Li).intersection(set(dfi.columns))
 
     common_num, common_bin, common_cat = get_common_lists(dfs)
 
-    # Sub-vistas actualizadas
-    subview = st.radio(
-        "Sub-vista",
-        ["Extracción comparada", "Regresión logística comparada", "Regresión lineal comparada", "Regresión no lineal comparada"],
-        horizontal=True
-    )
+    # Sub-vistas
+    subview = st.radio("Sub-vista", ["Extracción comparada", "Regresión logística comparada"], horizontal=True)
 
-    # ============= EXTRACCIÓN COMPARADA (con KPIs + filas por tipo de gráfico + heatmaps + tablas) =============
     if subview == "Extracción comparada":
         if len(common_cat)==0:
             st.error("No hay columnas categóricas en común en los 4 datasets.")
             st.stop()
         var_cat = st.selectbox("Variable categórica común", options=sorted(common_cat), index=sorted(common_cat).index("room_type") if "room_type" in common_cat else 0)
-
-        # KPIs por país (en una sola fila)
-        #st.markdown("### KPI's por país")
-        #cols = st.columns(4)
-        #for i, c in enumerate(COUNTRY_FILES.keys()):
-        #    with cols[i]:
-        #        kpis_block(dfs[c], c)
 
         # KPI's por país (fila completa)
         st.markdown("### KPI's por país")
@@ -851,63 +828,32 @@ if View == "Comparar países":
             with st.container():
                 kpis_block(dfs[c], c)
 
-        # Preparar tablas y figuras por país (una sola vez)
-        cache = {}
-        for c in COUNTRY_FILES.keys():
-            # devuelve: tabla, fig_bar, fig_pie, fig_donut, fig_area, fig_heat
-            cache[c] = extraction_tables_and_figs(dfs[c], var_cat)
-
-        countries = list(COUNTRY_FILES.keys())
-
-        def _grid_2x2(fig_key_idx: int, titulo: str):
-            st.subheader(titulo)
-            rows = [countries[:2], countries[2:4]]
-            for row in rows:
-                row_cols = st.columns(2)
-                for j, cc in enumerate(row):
-                    with row_cols[j]:
-                        st.markdown(f"**{cc}**")
-                        st.plotly_chart(cache[cc][fig_key_idx], use_container_width=True)
-
-        # 2x2 por tipo de gráfico (mismo tipo por fila)
-        _grid_2x2(fig_key_idx=1, titulo="Distribución por categoría (Bar) — Comparación directa")
-        _grid_2x2(fig_key_idx=2, titulo="Proporción por categoría (Pie) — Comparación directa")
-        _grid_2x2(fig_key_idx=3, titulo="Gráfico tipo anillo (Donut) — Comparación directa")
-        _grid_2x2(fig_key_idx=4, titulo="Tendencia acumulada (Área) — Comparación directa")
-        _grid_2x2(fig_key_idx=5, titulo="Proporción por categoría (Heatmap) — Comparación directa")
-
         st.markdown("---")
-        st.subheader("Tablas de frecuencias (Top 10) por país")
-        tabs = st.tabs(countries)
-        for t, c in zip(tabs, countries):
-            with t:
-                tabla = cache[c][0]
-                st.dataframe(tabla.style.background_gradient(cmap='Reds'), use_container_width=True)
+        st.markdown("### Extracción (4× gráficas por país)")
+        # Grilla 2x2 por país con (bar, pie, donut, área) + detalle (box/heatmap) + galería
+        for c in COUNTRY_FILES.keys():
+            st.subheader(f"{c}")
+            tabla, fig_bar, fig_pie, fig_donut, fig_area, detail_fig = extraction_charts(dfs[c], var_cat)
+            colA, colB = st.columns(2)
+            with colA: st.plotly_chart(fig_bar, use_container_width=True)
+            with colB: st.plotly_chart(fig_pie, use_container_width=True)
+            colC, colD = st.columns(2)
+            with colC: st.plotly_chart(fig_donut, use_container_width=True)
+            with colD: st.plotly_chart(fig_area, use_container_width=True)
 
-        # Imágenes por país (grid 2x2) — ahora muestra las 3 imágenes por ciudad
-        st.markdown("### Imágenes por país")
-        rows_img = [countries[:2], countries[2:4]]
-        for row in rows_img:
-            row_cols = st.columns(2)
-            for j, cc in enumerate(row):
-                with row_cols[j]:
-                    st.markdown(f"**{cc}**")
-                    img_list = COUNTRY_IMAGES.get(cc, [])
-                    if len(img_list) > 0:
-                        # Muestra hasta 3 imágenes en una fila
-                        img_cols = st.columns(len(img_list))
-                        for k, img_path in enumerate(img_list[:3]):
-                            with img_cols[k]:
-                                try:
-                                    st.image(img_path, use_container_width=True)
-                                except Exception:
-                                    st.write("🖼️ Imagen no encontrada")
-                    else:
-                        st.write("Sin imágenes registradas.")
+            st.plotly_chart(detail_fig, use_container_width=True)
 
+            if not modo_presentacion:
+                with st.expander(f"Tabla de frecuencias · {c}"):
+                    st.dataframe(tabla.style.background_gradient(cmap='Reds'), use_container_width=True)
 
-    # ============= LOGÍSTICA COMPARADA (igual que antes) =============
-    elif subview == "Regresión logística comparada":
+            with st.expander(f"Galería · {c}"):
+                gallery_block(c)
+
+            st.markdown("---")
+
+    else:
+        # Logística comparada
         if len(common_bin)==0:
             st.error("No hay variables binarias en común en los 4 datasets.")
             st.stop()
@@ -991,137 +937,12 @@ if View == "Comparar países":
                 with cols[i%2]:
                     st.markdown(f"**{c}**"); st.plotly_chart(res["pr_fig"], use_container_width=True)
 
-
-
-    # ============= LINEAL COMPARADA (Simple y Múltiple) =============
-    elif subview == "Regresión lineal comparada":
-        if len(common_num)==0:
-            st.error("No hay variables numéricas en común en los 4 datasets."); st.stop()
-
-        tab_simple, tab_multiple = st.tabs(["Lineal Simple", "Lineal Múltiple"])
-
-        # --- SIMPLE ---
-        with tab_simple:
-            colA, colB = st.columns(2)
-            with colA:
-                y_lin = st.selectbox("Y (numérica común)", options=common_num, key="cmp_rl_y")
-            with colB:
-                x_lin = st.selectbox("X (numérica común)", options=[c for c in common_num if c!=y_lin], key="cmp_rl_x")
-
-            st.markdown("### Dispersión + recta por país")
-            cols = st.columns(4)
-            for i, c in enumerate(COUNTRY_FILES.keys()):
-                dfi = dfs[c].select_dtypes(include=['float','float64','int','int64'])
-                if y_lin not in dfi.columns or x_lin not in dfi.columns:
-                    continue
-                X, y, dropped = _clean_xy(dfi, y_lin, [x_lin])
-                if len(y) < 3:
-                    continue
-                model = LinearRegression().fit(X, y)
-                y_pred = model.predict(X)
-                r2 = model.score(X, y); r = float(np.sqrt(abs(r2)))
-                fig = px.scatter(dfi, x=x_lin, y=y_lin, opacity=0.6, title=None)
-                order_idx = np.argsort(X[:,0])
-                fig.add_trace(go.Scatter(x=X[order_idx,0], y=y_pred[order_idx], mode="lines", name="Ŷ"))
-                with cols[i]:
-                    st.markdown(f"**{c}**  \nR²: `{r2:.2f}` · R: `{r:.2f}`")
-                    st.plotly_chart(fig, use_container_width=True)
-
-        # --- MÚLTIPLE ---
-        with tab_multiple:
-            colY, colXs = st.columns([1,2])
-            with colY:
-                y_linM = st.selectbox("Y (numérica común)", options=common_num, key="cmp_rlm_y")
-            with colXs:
-                xs_linM = st.multiselect("X (numéricas comunes)", options=[c for c in common_num if c!=y_linM], default=[c for c in common_num if c!=y_linM][:3], key="cmp_rlm_xs")
-
-            if len(xs_linM)==0:
-                st.info("Selecciona al menos 1 X común.")
-            else:
-                tabs = st.tabs(list(COUNTRY_FILES.keys()))
-                for t, c in zip(tabs, COUNTRY_FILES.keys()):
-                    with t:
-                        dfi = dfs[c].select_dtypes(include=['float','float64','int','int64'])
-                        if any(col not in dfi.columns for col in [y_linM] + xs_linM):
-                            st.warning("Columna(s) faltante(s) en este país.")
-                            continue
-                        X, y, dropped = _clean_xy(dfi, y_linM, xs_linM)
-                        if len(y) < max(3, len(xs_linM)+1):
-                            st.warning("Datos insuficientes tras limpieza.")
-                            continue
-                        m = LinearRegression().fit(X, y)
-                        y_pred = m.predict(X)
-                        r2 = m.score(X, y); r = float(np.sqrt(abs(r2)))
-                        coef_tab = pd.DataFrame({"Variable": ["Intercepto"] + xs_linM,
-                                                 "Coeficiente": [m.intercept_] + list(m.coef_)})
-                        st.markdown(f"**{c}** · R²: `{r2:.2f}` · R: `{r:.2f}`")
-                        st.dataframe(coef_tab, use_container_width=True)
-
-    # ============= NO LINEAL COMPARADA =============
-    elif subview == "Regresión no lineal comparada":
-        if len(common_num)==0:
-            st.error("No hay variables numéricas en común en los 4 datasets."); st.stop()
-
-        colA, colB = st.columns(2)
-        with colA:
-            y_nl = st.selectbox("Y (numérica común)", options=common_num, key="cmp_rnl_y")
-        with colB:
-            x_nl = st.selectbox("X (numérica común)", options=[c for c in common_num if c!=y_nl], key="cmp_rnl_x")
-
-        modelos = [
-            "Función cuadrática (a*x**2 + b*x + c)",
-            "Función exponencial (a*np.exp(-b*x)+c)",
-            "Función potencia (a*x**b)",
-            "Función cúbica (a*x**3 + b*x**2 + c*x + d)"
-        ]
-        modelo_sel = st.selectbox("Modelo no lineal", options=modelos, key="cmp_rnl_model")
-
-        def func_cuad(x, a, b, c): return a*x**2 + b*x + c
-        def func_cub(x, a, b, c, d): return a*x**3 + b*x**2 + c*x + d
-        def func_exp(x, a, b, c): return a * np.exp(-b * x) + c
-        def func_pot(x, a, b): return a * np.power(x, b)
-
-        cols = st.columns(4)
-        for i, c in enumerate(COUNTRY_FILES.keys()):
-            dfi = dfs[c].select_dtypes(include=['float','float64','int','int64'])
-            if any(col not in dfi.columns for col in [x_nl, y_nl]):
-                with cols[i]: st.warning("Columnas no disponibles."); continue
-            df_nl = dfi[[x_nl, y_nl]].replace([np.inf,-np.inf], np.nan).dropna()
-            if len(df_nl) < 3:
-                with cols[i]: st.warning("Datos insuficientes."); continue
-            x = df_nl[x_nl].to_numpy(dtype=float)
-            y = df_nl[y_nl].to_numpy(dtype=float)
-            sort_idx = np.argsort(x); xs = x[sort_idx]
-
-            try:
-                if modelo_sel.startswith("Función cuadrática"):
-                    pars, _ = curve_fit(func_cuad, x, y, maxfev=20000)
-                    y_pred = func_cuad(x, *pars); y_line = func_cuad(xs, *pars)
-                elif modelo_sel.startswith("Función cúbica"):
-                    pars, _ = curve_fit(func_cub, x, y, maxfev=30000)
-                    y_pred = func_cub(x, *pars); y_line = func_cub(xs, *pars)
-                elif modelo_sel.startswith("Función exponencial"):
-                    pars, _ = curve_fit(func_exp, x, y, maxfev=30000)
-                    y_pred = func_exp(x, *pars); y_line = func_exp(xs, *pars)
-                else:
-                    mask = (x>0) & (y>0) & np.isfinite(x) & np.isfinite(y)
-                    if mask.sum() < 3:
-                        with cols[i]: st.warning("x>0 e y>0 insuficientes para potencia."); continue
-                    xp, yp = x[mask], y[mask]
-                    pars, _ = curve_fit(func_pot, xp, yp, maxfev=20000)
-                    xs_safe = np.clip(xs, 1e-12, None); x_safe = np.clip(x, 1e-12, None)
-                    y_pred = func_pot(x_safe, *pars); y_line = func_pot(xs_safe, *pars)
-
-                r2 = r2_score(y, y_pred); r = float(np.sqrt(abs(r2)))
-                fig = px.scatter(x=x, y=y, labels={"x": x_nl, "y": y_nl}, opacity=0.6, title=None)
-                fig.add_trace(go.Scatter(x=xs, y=y_line, mode="lines", name="Ŷ", line=dict(width=2)))
-                with cols[i]:
-                    st.markdown(f"**{c}**  \nR²: `{r2:.3f}` · R: `{r:.3f}`")
-                    st.plotly_chart(fig, use_container_width=True)
-            except RuntimeError as e:
-                with cols[i]: st.error(f"No convergió: {e}")
-            except Exception as e:
-                with cols[i]: st.error(f"Error: {e}")
+        with st.expander("Distribución de probabilidades por país"):
+            cols = st.columns(2)
+            items = list(results.items())
+            for i, (c, res) in enumerate(items):
+                with cols[i%2]:
+                    st.markdown(f"**{c}**"); st.plotly_chart(res["prob_fig"], use_container_width=True)
 
 # FOOTER
 st.markdown("---")
