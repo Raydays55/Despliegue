@@ -26,7 +26,7 @@ from imblearn.under_sampling import RandomUnderSampler
 # Configuración global
 st.set_page_config(
     page_title="Airbnb (Data Web)",
-    page_icon="assets/airbnb_icon.jpg",
+    page_icon="assets/icon.jpg",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -101,6 +101,8 @@ def _normalize_binary(series):
 def _normalize_df(df_raw):
     df = df_raw.copy()
     df = df.drop(['Unnamed: 0','latitude','longitude'], axis=1, errors="ignore")
+    if 'id' in df.columns:
+        df['id'] = df['id'].astype(str)
     if 'host_id' in df.columns:
         df['host_id'] = df['host_id'].astype(str)
     for col in ['host_is_superhost','host_identity_verified','instant_bookable']:
@@ -122,7 +124,7 @@ def load_country_df(country: str):
     ]
     return df, Lista
 
-# ========= Helpers multi-país =========
+#  Helpers multi-país 
 @st.cache_data(show_spinner=False)
 def load_all_countries():
     data = {}

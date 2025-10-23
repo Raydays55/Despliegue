@@ -120,10 +120,13 @@ def _normalize_df(df_raw):
     df = df.loc[:, ~df.columns.str.contains(r"^Unnamed", na=False)]
 
     # 3) Drops opcionales que ya tenías
-    df = df.drop(['latitude','longitude','first_review','last_review','host_since', 'price', 'estimated_revenue_l365d'],
+    df = df.drop(['latitude','longitude','first_review','last_review','host_since', 'price', 'estimated_revenue_l365d','source','id', 'scrape_id'],
                  axis=1, errors="ignore")
 
     # 4) Tipos
+    if 'id' in df.columns:
+        df['id'] = df['id'].astype(str)
+
     if 'host_id' in df.columns:
         df['host_id'] = df['host_id'].astype(str)
 
@@ -205,8 +208,8 @@ if View == "Extracción de Características":
         st.markdown('</div>', unsafe_allow_html=True)
     with col3:
         st.markdown('<div class="air-card">', unsafe_allow_html=True)
-        med_price = np.nanmedian(df['price_eur']) if 'price_eur' in df.columns else np.nan
-        st.metric("Mediana de precio (€)", f"€{med_price:,.0f}" if np.isfinite(med_price) else "—")
+        med_price = np.nanmean(df['price_eur']) if 'price_eur' in df.columns else np.nan
+        st.metric("Media de precio", f"€{med_price:,.0f}" if np.isfinite(med_price) else "—")
         st.markdown('</div>', unsafe_allow_html=True)
     with col4:
         st.markdown('<div class="air-card">', unsafe_allow_html=True)
@@ -756,7 +759,7 @@ if View == "Regresión Logística":
 st.markdown("---")
 st.markdown("""
 <div style="text-align:center; opacity:0.8; font-size:0.9rem;">
-© Proyecto para Gestión de Proyectos — Dashboard creado por <b>Raymundo Díaz</b> con ayuda de IA y profe Freddy.  
+© Proyecto para Gestión de Proyectos — Dashboard creado por <b>Los Guaranies</b> con ayuda de IA y profe Freddy/Malu.  
 <br> Construido con Streamlit, Plotly y Python.
 </div>
 """, unsafe_allow_html=True)
