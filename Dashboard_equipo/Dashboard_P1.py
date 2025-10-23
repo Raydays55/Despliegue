@@ -1,5 +1,5 @@
-# Berlin Final Dashboard.
-# Con ayuda de IA, se logró mejorar el código de despligue y mejorar el dashboard.
+# Dashboard Final equipo — Proyecto Airbnb (By Raymundo Díaz + IA + Profe Freddy)
+# Versión final optimizada y revisada
 
 ##########
 # Importar librerías
@@ -10,24 +10,16 @@ import plotly.io as pio
 
 import pandas as pd
 import numpy as np
-
 from scipy.optimize import curve_fit
-from scipy import stats
-
 from sklearn.metrics import (
     r2_score, mean_absolute_error, mean_squared_error,
     confusion_matrix, accuracy_score, precision_score,
-    recall_score, roc_auc_score, roc_curve, classification_report, f1_score, precision_recall_curve, average_precision_score, balanced_accuracy_score
+    recall_score, roc_auc_score, roc_curve, classification_report, f1_score,
+    precision_recall_curve, average_precision_score, balanced_accuracy_score
 )
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression, LogisticRegression
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import statsmodels.api as sm
-from statsmodels.formula.api import ols
-
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
@@ -35,96 +27,82 @@ from imblearn.under_sampling import RandomUnderSampler
 # Configuración global
 st.set_page_config(
     page_title="Airbnb (Data Web)",
-    page_icon= "assets/airbnb_icon.jpg",
+    page_icon="assets/icon.jpg",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Paleta y colores Airbnb
+# Paleta Airbnb
 AIRBNB_RED   = "#FF5A5F"
 AIRBNB_TEAL  = "#00A699"
 AIRBNB_ORANGE= "#FC642D"
 AIRBNB_GRAY  = "#BFBFBF"
-AIRBNB_DARK_BG = "#0E1117"   # fondo oscuro principal
-AIRBNB_CARD   = "#151A22"    # tarjetas
-AIRBNB_BORDER = "#232A35" 
-CONT_GRADIENT = "Reds" # para heatmaps
+AIRBNB_DARK_BG = "#0E1117"
+AIRBNB_CARD   = "#151A22"
+AIRBNB_BORDER = "#232A35"
+CONT_GRADIENT = "Reds"
 
-# CSS look and feel Airbnb
-st.markdown(
-    f"""
-    <style>
-    .block-container {{ padding-top: 1.2rem; padding-bottom: 2rem; }}
+##########
+# CSS Look & Feel Airbnb
+st.markdown(f"""
+<style>
+.block-container {{ padding-top: 1.2rem; padding-bottom: 2rem; }}
 
-    /* TITULARES */
-    h1, h2, h3 {{ letter-spacing:.2px; }}
+/* Fondo degradado unificado */
+html, body, [data-testid="stAppViewContainer"], section[data-testid="stSidebar"] {{
+    background: radial-gradient(circle at 30% 30%, #131722 0%, #0E1117 100%) !important;
+    color: white !important;
+}}
+section[data-testid="stSidebar"] {{
+    border-right: 1px solid {AIRBNB_BORDER};
+}}
 
-    /* === UN SOLO LOOK OSCURO (sidebar + contenido) === */
-    html, body, [data-testid="stAppViewContainer"] {{
-        background:{AIRBNB_DARK_BG} !important;
-        color: white !important;
-    }}
-    section[data-testid="stSidebar"] {{
-        background:{AIRBNB_DARK_BG} !important;
-        border-right: 1px solid {AIRBNB_BORDER};
-        color: white !important;
-    }}
+/* Tarjetas KPI */
+.air-card {{
+    border: 1px solid {AIRBNB_BORDER};
+    border-radius:16px; padding:1rem;
+    background:{AIRBNB_CARD};
+}}
 
-    /* Tarjetas KPI */
-    .air-card {{
-        border: 1px solid {AIRBNB_BORDER};
-        border-radius:16px; padding:1rem;
-        background:{AIRBNB_CARD};
-        box-shadow:none;
-    }}
+/* Botones */
+.stButton>button {{
+    background:{AIRBNB_RED}; color:white; border-radius:12px; border:none;
+    padding:.6rem 1rem; font-weight:600;
+}}
+.stButton>button:hover {{ opacity:.9 }}
 
-    /* Botones */
-    .stButton>button {{
-        background:{AIRBNB_RED}; color:white; border-radius:12px; border:none;
-        padding:.6rem 1rem; font-weight:600;
-    }}
-    .stButton>button:hover {{ opacity:.9 }}
+/* Tablas */
+.stDataFrame, .stTable {{ color: white !important; }}
+</style>
+""", unsafe_allow_html=True)
 
-    /* Quitar “píldoras”/fondos blancos en métricas */
-    [data-testid="stMetricDelta"], .stMetric {{"background": "transparent"}}
-    div[data-testid="stMetricValue"] > div {{
-        background: transparent !important;
-    }}
-
-    /* Tablas en oscuro */
-    .stDataFrame, .stTable {{ color: white !important; }}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# Plotly: plantilla con colorway Airbnb
+##########
+# Plotly: plantilla Airbnb
 AIRBNB_COLORWAY = ["#FF5A5F", "#00A699", "#FC642D", "#BFBFBF", "#767676"]
-import plotly.io as pio
 pio.templates["airbnb_dark"] = pio.templates["plotly_dark"]
 pio.templates["airbnb_dark"].layout.colorway = AIRBNB_COLORWAY
 px.defaults.template = "airbnb_dark"
 px.defaults.color_continuous_scale = CONT_GRADIENT
 px.defaults.height = 420
 
-
 ##########
-# Multi-país: rutas y normalización
+# Multi-país
 COUNTRY_FILES = {
-    "Alemania":  "Berlin_Final.csv",
-    "Valencia":    "Valencia_Final.csv",
-    "Estocolmo":   "Estocolmo_Final.csv",
-    "Mexico":    "Mexico_Final.csv",
+    "Alemania": "Berlin_Final.csv",
+    "Valencia": "Valencia_Final.csv",
+    "Estocolmo": "Estocolmo_Final.csv",
+    "Mexico": "Mexico_Final.csv",
 }
 
-# Galería por país (ajusta rutas reales)
 COUNTRY_IMAGES = {
     "Alemania": ["assets/Berlin1.jpg", "assets/Berlin3.jpg", "assets/Berlin2.jpg"],
-    "Valencia":   ["assets/Valencia1.jpg",  "assets/Valencia2.jpg",  "assets/Valencia3.jpg"],
-    "Estocolmo":  ["assets/Estocolmo1.jpg", "assets/Estocolmo2.jpg", "assets/Estocolmo3.jpg"],
-    "Mexico":   ["assets/Mexico1.jpg",  "assets/Mexico2.jpg",  "assets/Mexico3.jpg"],
+    "Valencia": ["assets/Valencia1.jpg", "assets/Valencia2.jpg", "assets/Valencia3.jpg"],
+    "Estocolmo": ["assets/Estocolmo1.jpg", "assets/Estocolmo2.jpg", "assets/Estocolmo3.jpg"],
+    "Mexico": ["assets/Mexico1.jpg", "assets/Mexico2.jpg", "assets/Mexico3.jpg"],
 }
 
+##########
+# Normalización
 BIN_TRUE = {"t","true","True",1,"1",True}
 BIN_FALSE= {"f","false","False",0,"0",False}
 
@@ -134,36 +112,50 @@ def _normalize_binary(series):
 
 def _normalize_df(df_raw):
     df = df_raw.copy()
-    # eliminaciones comunes si existen
-    df = df.drop(['Unnamed: 0','latitude','longitude'], axis=1, errors="ignore")
-    # id a str
+
+    # 1) Normaliza nombres de columnas (quitan espacios accidentales)
+    df.columns = df.columns.str.strip()
+
+    # 2) Drop de *cualquier* columna Unnamed
+    df = df.loc[:, ~df.columns.str.contains(r"^Unnamed", na=False)]
+
+    # 3) Drops opcionales que ya tenías
+    df = df.drop(['latitude','longitude','first_review','last_review','host_since', 'price', 'estimated_revenue_l365d'],
+                 axis=1, errors="ignore")
+
+    # 4) Tipos
     if 'host_id' in df.columns:
         df['host_id'] = df['host_id'].astype(str)
 
-    # columnas esperadas (renombra si vienen distinto en otros países)
-    rename_map = {
-        # "host_is_superhost_flag": "host_is_superhost",  # ejemplo si cambia el nombre
-    }
-    df = df.rename(columns=rename_map)
-
-    # normaliza binaria típica de Airbnb
+    # 5) Normaliza binarias
     for col in ['host_is_superhost','host_identity_verified','instant_bookable']:
         if col in df.columns:
             df[col] = _normalize_binary(df[col])
 
-    # convierte tasas a numérico
-    for col in ['host_response_rate','host_acceptance_rate','price']:
+    # 6) A numérico (coerce => NaN si hay “90%”, etc.)
+    for col in ['host_response_rate','host_acceptance_rate','price','estimated_revenue_l365d']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
     return df
 
-@st.cache_resource
+def _clean_xy(df_base, y_col, x_cols):
+    """
+    Devuelve X, y sin NaN/Inf y un conteo de filas filtradas.
+    """
+    work = df_base[x_cols + [y_col]].replace([np.inf, -np.inf], np.nan)
+    before = len(work)
+    work = work.dropna()
+    after = len(work)
+    X = work[x_cols].to_numpy(dtype=float)
+    y = work[y_col].to_numpy(dtype=float)
+    return X, y, before - after
+
+@st.cache_data(show_spinner=False)
 def load_country_df(country: str):
     path = COUNTRY_FILES[country]
     raw = pd.read_csv(path)
     df = _normalize_df(raw)
-
     Lista = [
         'host_is_superhost','host_identity_verified','host_response_time',
         'host_response_rate','host_acceptance_rate','host_total_listings_count',
@@ -171,54 +163,37 @@ def load_country_df(country: str):
     ]
     return df, Lista
 
-
-# Carga de datos función 'load_data()'
-df, Lista = load_country_df()
+# Carga inicial
+df, Lista = load_country_df("Alemania")
 
 ##########
-# HERO HEADER (branding + KPIs)
+# Header
 col_logo, col_title = st.columns([1,5], vertical_alignment="center")
 with col_logo:
-    try:
-        st.image("assets/Logo3.jpg", width=90)
-    except Exception:
-        st.write("🏠")
+    st.image("assets/Logo3.jpg", width=90)
 with col_title:
-    st.markdown(
-        """
+    st.markdown("""
         # Airbnb Data Analysis
         <span style="color:#767676">Listados, precios y comportamiento de oferta</span>
-        """,
-        unsafe_allow_html=True
-    )
+    """, unsafe_allow_html=True)
 
 ##########
-# Sidebar con identidad
-st.sidebar.image("assets/Logoo.jpg", use_container_width=True, width= 70)
-st.sidebar.caption("Análisis exploratorio y modelos)")
+# Sidebar
+st.sidebar.image("assets/Logoo.jpg", use_container_width=True)
+st.sidebar.caption("Análisis exploratorio y modelos")
 st.sidebar.markdown("---")
-#st.sidebar.title('Berlín, Alemania')
-
-# Toggle de modo “presentación” (oculta tablas largas)
 modo_presentacion = st.sidebar.toggle("Modo presentación", value=False)
-
-# Selector de país
 country = st.sidebar.selectbox("País", list(COUNTRY_FILES.keys()), index=0)
 df, Lista = load_country_df(country)
-
-
-# Menú de vistas
 View = st.sidebar.selectbox(
-    label= 'Tipo de análisis',
-    options= ['Extracción de Características', 'Regresión Lineal', 'Regresión No Lineal', 'Regresión Logística', 'Comparar países'],
+    label='Tipo de análisis',
+    options=['Extracción de Características', 'Regresión Lineal', 'Regresión No Lineal', 'Regresión Logística', 'Comparar países'],
     index=0
 )
 
-
 ##########################################################################################
-# Vista 1
+# Vista 1 — Extracción de características
 if View == "Extracción de Características":
-    # KPIs
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown('<div class="air-card">', unsafe_allow_html=True)
@@ -230,104 +205,63 @@ if View == "Extracción de Características":
         st.markdown('</div>', unsafe_allow_html=True)
     with col3:
         st.markdown('<div class="air-card">', unsafe_allow_html=True)
-        med_price = np.nanmedian(df['price']) if 'price' in df.columns else np.nan
-        st.metric("Mediana de precio (€)", f"${med_price:,.0f}" if np.isfinite(med_price) else "—")
+        med_price = np.nanmedian(df['price_eur']) if 'price_eur' in df.columns else np.nan
+        st.metric("Mediana de precio (€)", f"€{med_price:,.0f}" if np.isfinite(med_price) else "—")
         st.markdown('</div>', unsafe_allow_html=True)
     with col4:
         st.markdown('<div class="air-card">', unsafe_allow_html=True)
-        superhosts = (df['host_is_superhost']== 't').sum() if 'host_is_superhost' in df.columns else "—"
+        superhosts = int((df['host_is_superhost'] == 1).sum()) if 'host_is_superhost' in df.columns else 0
         st.metric("Superhosts", superhosts)
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
 
-    Variable_Cat = st.sidebar.selectbox(label="Variable categórica a analizar", options=Lista)
+    Variable_Cat = st.sidebar.selectbox("Variable categórica a analizar", options=Lista)
     Tabla_frecuencias = df[Variable_Cat].value_counts(dropna=False).reset_index().head(10)
     Tabla_frecuencias.columns = ['categorias', 'frecuencia']
 
-    # Comienzo
     st.title("Extracción de Características")
     st.caption('Se muestran máximo las 10 categorías con más frecuencia.')
 
-    # FILA 1 — Barras y Pastel
     Contenedor_A, Contenedor_B = st.columns(2)
-
     with Contenedor_A:
         st.subheader("Distribución por categoría (Bar Plot)")
-        fig_bar = px.bar(
-            Tabla_frecuencias,
-            x='categorias',
-            y='frecuencia',
-            color='categorias',
-            title=f"Frecuencia por categoría"
-        )
-        fig_bar.update_layout(height=400)
+        fig_bar = px.bar(Tabla_frecuencias, x='categorias', y='frecuencia', color='categorias')
         st.plotly_chart(fig_bar, use_container_width=True)
-
     with Contenedor_B:
         st.subheader("Proporción por categoría (Pie Chart)")
-        fig_pie = px.pie(
-            Tabla_frecuencias,
-            names='categorias',
-            values='frecuencia',
-            title=f"Distribución porcentual"
-        )
+        fig_pie = px.pie(Tabla_frecuencias, names='categorias', values='frecuencia')
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # FILA 2 — Dona y Área
     Contenedor_C, Contenedor_D = st.columns(2)
-
     with Contenedor_C:
         st.subheader("Gráfico tipo anillo")
-        fig_donut = px.pie(
-            Tabla_frecuencias,
-            names='categorias',
-            values='frecuencia',
-            hole=0.5
-        )
+        fig_donut = px.pie(Tabla_frecuencias, names='categorias', values='frecuencia', hole=0.5)
         st.plotly_chart(fig_donut, use_container_width=True)
-
     with Contenedor_D:
         st.subheader("Tendencia acumulada (Área)")
-        fig_area = px.area(
-            Tabla_frecuencias.sort_values(by='frecuencia', ascending=False),
-            x='categorias',
-            y='frecuencia',
-            title=f"Frecuencia"
-        )
+        fig_area = px.area(Tabla_frecuencias.sort_values(by='frecuencia', ascending=False),
+                           x='categorias', y='frecuencia')
         st.plotly_chart(fig_area, use_container_width=True)
 
-    # FILA 3: Heatmap o Boxplot
     st.markdown("---")
     st.subheader("Análisis más profundo")
 
     if Variable_Cat in ['room_type', 'property_type', 'price_cat'] and 'price' in df.columns:
         st.write("**Relación entre categorías y precio (Boxplot):**")
-        fig_box = px.box(
-            df,
-            x=Variable_Cat,
-            y='price',
-            color=Variable_Cat,
-            title=f"Distribución de precios según"
-        )
+        fig_box = px.box(df, x=Variable_Cat, y='price', color=Variable_Cat)
         st.plotly_chart(fig_box, use_container_width=True)
     else:
         st.write("**Heatmap de proporciones:**")
         heat_df = pd.crosstab(index=df[Variable_Cat], columns='count', normalize='columns') * 100
-        fig_heat = px.imshow(
-            heat_df, color_continuous_scale = CONT_GRADIENT,
-            title=f"Proporción por categoría",
-            text_auto=".1f"
-        )
+        fig_heat = px.imshow(heat_df, color_continuous_scale=CONT_GRADIENT, title="Proporción por categoría")
         st.plotly_chart(fig_heat, use_container_width=True)
 
-    # Tabla de frecuencias (ocultable)
     if not modo_presentacion:
         st.markdown("---")
         st.subheader("Tabla de frecuencias")
         st.dataframe(Tabla_frecuencias.style.background_gradient(cmap='Reds'), use_container_width=True)
 
-    # Galería visual por país
     st.markdown(f"**Galería:** {country} — Airbnb")
     imgs = COUNTRY_IMAGES.get(country, [])
     gcols = st.columns(3)
@@ -336,7 +270,8 @@ if View == "Extracción de Características":
             try:
                 st.image(path, use_container_width=True)
             except Exception:
-                st.write("🖼️")
+                st.write("🖼️ Imagen no encontrada")
+
 
 
 ##########################################################################################
@@ -357,11 +292,18 @@ if View == "Regresión Lineal":
         Variable_x = st.selectbox("Variable independiente (X)", options=Lista_num, key="rl_x")
 
     # Ajuste
-    X = numeric_df[[Variable_x]].values
-    y = numeric_df[Variable_y].values
+    X, y, dropped = _clean_xy(numeric_df, Variable_y, [Variable_x])
+    if dropped > 0 and not modo_presentacion:
+        st.info(f"Se descartaron {dropped} filas con NaN/Inf para el ajuste.")
+
+    if len(y) < 3:
+        st.error("No hay suficientes filas válidas para ajustar el modelo.")
+        st.stop()
+
     model = LinearRegression()
     model.fit(X, y)
     y_pred = model.predict(X)
+
 
     # Métricas
     r2 = r2_score(y, y_pred)
@@ -400,7 +342,7 @@ if View == "Regresión Lineal":
     st.markdown("---")
 
     # Lineal múltiple
-    st.subheader("Correlación lineal múltiple")
+    st.subheader("Regresión lineal múltiple")
     col1, col2 = st.columns([1,2])
     with col1:
         Variable_y_M = st.selectbox("Variable dependiente (Y)", options=Lista_num, key="rlm_y")
@@ -408,14 +350,19 @@ if View == "Regresión Lineal":
         Variables_x_M = st.multiselect("Variables independientes (X)", options= Lista_num, key="rlm_xs")
 
     if len(Variables_x_M) >= 1:
-        X_M = numeric_df[Variables_x_M].values
-        y_M = numeric_df[Variable_y_M].values
+        X_M, y_M, droppedM = _clean_xy(numeric_df, Variable_y_M, Variables_x_M)
+        if droppedM > 0 and not modo_presentacion:
+            st.info(f"Se descartaron {droppedM} filas con NaN/Inf para el ajuste múltiple.")
+        if len(y_M) < max(3, len(Variables_x_M)+1):
+            st.error("No hay suficientes filas válidas para el modelo múltiple.")
+            st.stop()
+
         Model_M = LinearRegression()
         Model_M.fit(X_M, y_M)
         y_pred_M = Model_M.predict(X_M)
 
         # Métricas
-        coef_Deter_multiple= Model_M.score(X=X_M, y= y_M)
+        coef_Deter_multiple = Model_M.score(X=X_M, y=y_M)
         coef_Correl_multiple = np.sqrt(abs(coef_Deter_multiple))
 
         # Coeficientes
@@ -462,10 +409,16 @@ if View == "Regresión No Lineal":
     Modelo = st.selectbox("Elige modelo no lineal", options=modelos, key="rnl_modelo_cf")
 
     # Datos
-    x = numeric_df[Variable_x].to_numpy(dtype=float)
-    y = numeric_df[Variable_y].to_numpy(dtype=float)
+    df_nl = numeric_df[[Variable_x, Variable_y]].replace([np.inf, -np.inf], np.nan).dropna()
+    if len(df_nl) < 3:
+        st.error("Datos insuficientes tras limpiar NaN/Inf para ajustar el modelo no lineal.")
+        st.stop()
+
+    x = df_nl[Variable_x].to_numpy(dtype=float)
+    y = df_nl[Variable_y].to_numpy(dtype=float)
     sort_idx = np.argsort(x)
     x_sorted = x[sort_idx]
+
 
     # Definiciones de funciones
     def func_cuad(x, a, b, c):
@@ -586,16 +539,28 @@ if View == "Regresión Logística":
         st.info("Selecciona al menos una variable independiente (X).")
     else:
         # 2) Preparar X, y (sin modificar df original)
-        X = df[Variables_x].astype(float).values
-        y_raw = df[Variable_y]
+        # Trabajar sobre un df que contenga todas las columnas necesarias
+        base = df[Variables_x + [Variable_y]].copy()
 
-        # Verificar binaria y mapear SOLO en memoria para el modelo
-        clases = y_raw.dropna().unique().tolist()
-        if len(clases) != 2:
-            st.error(f"La variable '{Variable_y}' debe tener exactamente 2 clases. Encontradas: {clases}")
-        else:
-            mapping = {clases[0]: 0, clases[1]: 1}  # mantiene nombres originales para mostrar
-            y = y_raw.map(mapping).values
+        # Mapear Y a {0,1} conservando nombres
+        vals = base[Variable_y].dropna().unique().tolist()
+        if len(vals) != 2:
+            st.error(f"La variable '{Variable_y}' debe tener exactamente 2 clases. Encontradas: {vals}")
+            st.stop()
+
+        mapping = {vals[0]: 0, vals[1]: 1}
+        base['__y__'] = base[Variable_y].map(mapping)
+
+        # Quita NaN/Inf en X y NaN en Y
+        base = base.replace([np.inf, -np.inf], np.nan).dropna(subset=Variables_x + ['__y__'])
+
+        if base['__y__'].nunique() < 2:
+            st.error("Tras limpiar datos, solo queda una clase en Y. Ajusta la selección de variables o revisa faltantes.")
+            st.stop()
+
+        X = base[Variables_x].astype(float).to_numpy()
+        y = base['__y__'].to_numpy(dtype=int)
+        clases = vals  # para etiquetar métricas
 
         # 3) Split + escalado        
         # Sidebar extra: manejo de desbalance y estrategia de umbral
@@ -787,320 +752,11 @@ if View == "Regresión Logística":
         st.caption(f"Mapeo interno (solo para el modelo): {clases[0]} → 0, {clases[1]} → 1. "
                 f"Prevalencia clase 1 (test): {prev:.3f}")
 
-##########################################################################################
-# Vista 5: Comparar países
-if View == "Comparar países":
-    st.title("Comparar países")
-
-    # --- Parámetros comunes para comparar con la misma especificación ---
-    st.subheader("Parámetros del modelo")
-    # 1) Especificación para EXTRACCIÓN (una categórica)
-    cat_for_kpis = st.selectbox("Categórica para frecuencias", options=['room_type','property_type','price_cat'] if len(Lista)>0 else [None])
-
-    # 2) Regresión LINEAL simple: elige Y y X que existan en todos
-    common_numeric = None
-    # calculamos intersección de columnas numéricas entre países
-    num_sets = []
-    for c in COUNTRY_FILES:
-        d, _ = load_country_df(c)
-        num = d.select_dtypes(include=['float','float64','int','int64']).columns
-        num_sets.append(set(num))
-    common_numeric = sorted(list(set.intersection(*num_sets))) if num_sets else []
-
-    if len(common_numeric) >= 2:
-        colL, colR = st.columns(2)
-        with colL:
-            lin_Y = st.selectbox("Y (Lineal)", options=common_numeric)
-        with colR:
-            lin_X = st.selectbox("X (Lineal)", options=[c for c in common_numeric if c != lin_Y])
-    else:
-        st.warning("No hay suficientes numéricas comunes para comparar la regresión lineal.")
-        lin_Y = lin_X = None
-
-    # 3. Regresión NO LINEAL comparada
-    st.markdown("---")
-    st.subheader("Regresión no lineal comparada")
-
-    # Modelos disponibles (mismos que ya usas)
-    modelos = [
-        "Función cuadrática (a*x**2 + b*x + c)",
-        "Función exponencial (a*np.exp(-b*x)+c)",
-        "Función potencia (a*x**b)",
-        "Función cúbica (a*x**3 + b*x**2 + c*x + d)"
-    ]
-    Modelo_cmp = st.selectbox("Modelo no lineal", options=modelos, key="cmp_nl_model")
-
-    # Elegir X/Y comunes
-    # (reutilizamos 'common_numeric' ya calculado arriba)
-    if len(common_numeric) < 2:
-        st.info("No hay suficientes variables numéricas comunes para la comparación no lineal.")
-    else:
-        colA, colB = st.columns(2)
-        with colA:
-            nl_Y = st.selectbox("Y (No lineal)", options=common_numeric, key="cmp_nl_y")
-        with colB:
-            nl_X = st.selectbox("X (No lineal)", options=[c for c in common_numeric if c != nl_Y], key="cmp_nl_x")
-
-        # Definiciones de funciones (mismas que en tu vista No lineal)
-        def func_cuad(x, a, b, c): return a*x**2 + b*x + c
-        def func_cub(x, a, b, c, d): return a*x**3 + b*x**2 + c*x + d
-        def func_exp(x, a, b, c): return a * np.exp(-b * x) + c
-        def func_pot(x, a, b): return a * np.power(x, b)
-
-        rows = []
-        for c in COUNTRY_FILES:
-            d,_ = load_country_df(c)
-            numdf = d.select_dtypes(include=['float','float64','int','int64']).dropna(subset=[nl_X, nl_Y])
-            if len(numdf) < 30:
-                rows.append({"País": c, "R^2": np.nan, "R": np.nan})
-                continue
-
-            x = numdf[nl_X].to_numpy(dtype=float)
-            y = numdf[nl_Y].to_numpy(dtype=float)
-
-            try:
-                if Modelo_cmp.startswith("Función cuadrática"):
-                    pars, _ = curve_fit(func_cuad, x, y, maxfev=20000)
-                    y_pred = func_cuad(x, *pars)
-                elif Modelo_cmp.startswith("Función cúbica"):
-                    pars, _ = curve_fit(func_cub, x, y, maxfev=30000)
-                    y_pred = func_cub(x, *pars)
-                elif Modelo_cmp.startswith("Función exponencial"):
-                    mask = np.isfinite(x) & np.isfinite(y)
-                    pars, _ = curve_fit(func_exp, x[mask], y[mask], maxfev=30000)
-                    y_pred = func_exp(x, *pars)
-                elif Modelo_cmp.startswith("Función potencia"):
-                    mask = (x > 0) & (y > 0) & np.isfinite(x) & np.isfinite(y)
-                    if mask.sum() < 3:
-                        rows.append({"País": c, "R^2": np.nan, "R": np.nan})
-                        continue
-                    pars, _ = curve_fit(func_pot, x[mask], y[mask], maxfev=20000)
-                    x_safe = np.clip(x, 1e-12, None)
-                    y_pred = func_pot(x_safe, *pars)
-                else:
-                    rows.append({"País": c, "R^2": np.nan, "R": np.nan})
-                    continue
-
-                r2 = r2_score(y, y_pred)
-                rows.append({"País": c, "R^2": r2, "R": np.sqrt(abs(r2))})
-            except Exception:
-                rows.append({"País": c, "R^2": np.nan, "R": np.nan})
-
-        comp_nl = pd.DataFrame(rows)
-        st.dataframe(comp_nl, use_container_width=True)
-        try:
-            fig_r2_nl = px.bar(comp_nl, x="País", y="R^2", title=f"R^2 por país — {Modelo_cmp}")
-            st.plotly_chart(fig_r2_nl, use_container_width=True)
-        except Exception:
-            pass
-
-    # 4) Regresión LOGÍSTICA: misma Y binaria y conjunto X numérico
-    # intentamos columnas binarias comunes
-    dicos_sets = []
-    for c in COUNTRY_FILES:
-        d,_ = load_country_df(c)
-        dicos = []
-        for col in d.columns:
-            vals = d[col].dropna().unique()
-            if len(vals) == 2: dicos.append(col)
-        dicos_sets.append(set(dicos))
-    common_dicos = sorted(list(set.intersection(*dicos_sets))) if dicos_sets else []
-
-    if len(common_dicos) == 0:
-        st.warning("No hay Y binarias comunes en todos los países.")
-        logit_Y = None
-    else:
-        logit_Y = st.selectbox("Y binaria (Logística)", options=common_dicos)
-
-    # X numéricas comunes
-    if common_numeric:
-        logit_Xs = st.multiselect("X numéricas (Logística, comunes)", options=common_numeric,
-                                  default=[x for x in common_numeric if x in ['host_response_rate','host_acceptance_rate']][:2])
-    else:
-        logit_Xs = []
-
-    st.markdown("---")
-
-    # =======================
-    # KPIs comparativos rápidos
-    # =======================
-    kpi_rows = []
-    for c in COUNTRY_FILES:
-        d,_ = load_country_df(c)
-        n = len(d)
-        n_prop = d['property_type'].nunique() if 'property_type' in d.columns else np.nan
-        med_price = np.nanmedian(d['price']) if 'price' in d.columns else np.nan
-        superhosts = int((d['host_is_superhost']==1).sum()) if 'host_is_superhost' in d.columns else np.nan
-        kpi_rows.append({"País":c, "Filas":n, "Tipos de propiedad":n_prop,
-                         "Mediana precio":med_price, "Superhosts":superhosts})
-    kpi_df = pd.DataFrame(kpi_rows)
-    st.subheader("KPIs comparativos")
-    st.dataframe(kpi_df, use_container_width=True)
-    try:
-        fig_kpi = px.bar(kpi_df, x="País", y="Superhosts", title="Superhosts por país")
-        st.plotly_chart(fig_kpi, use_container_width=True)
-    except Exception:
-        pass
-
-    # =======================
-    # Frecuencias comparadas (una categórica)
-    # =======================
-    if cat_for_kpis and isinstance(cat_for_kpis, str):
-        st.subheader(f"Top categorías de `{cat_for_kpis}` por país")
-        tabs = st.tabs(list(COUNTRY_FILES.keys()))
-        for i, c in enumerate(COUNTRY_FILES):
-            with tabs[i]:
-                d,_ = load_country_df(c)
-                if cat_for_kpis in d.columns:
-                    freq = d[cat_for_kpis].value_counts(dropna=False).reset_index().head(8)
-                    freq.columns = ['categoría','frecuencia']
-                    g = px.bar(freq, x='categoría', y='frecuencia', title=f"{c}")
-                    st.plotly_chart(g, use_container_width=True)
-                else:
-                    st.info(f"{c}: columna no disponible.")
-
-    st.markdown("---")
-
-    # =======================
-    # Regresión LINEAL comparada
-    # =======================
-    if lin_Y and lin_X:
-        st.subheader(f"Regresión lineal simple — Y: {lin_Y} ~ X: {lin_X}")
-        rows = []
-        for c in COUNTRY_FILES:
-            d,_ = load_country_df(c)
-            numdf = d.select_dtypes(include=['float','float64','int','int64']).dropna(subset=[lin_Y, lin_X])
-            if len(numdf) < 20: 
-                rows.append({"País":c, "R^2":np.nan, "R":np.nan, "Coef":np.nan, "Intercepto":np.nan})
-                continue
-            X = numdf[[lin_X]].values; y = numdf[lin_Y].values
-            mdl = LinearRegression().fit(X,y)
-            r2 = mdl.score(X,y)
-            rows.append({"País":c, "R^2":r2, "R":np.sqrt(abs(r2)), "Coef":mdl.coef_[0], "Intercepto":mdl.intercept_})
-        comp_lin = pd.DataFrame(rows)
-        st.dataframe(comp_lin, use_container_width=True)
-        try:
-            fig_r2 = px.bar(comp_lin, x="País", y="R^2", title="R^2 por país (lineal simple)")
-            st.plotly_chart(fig_r2, use_container_width=True)
-        except Exception:
-            pass
-
-    st.markdown("---")
-
-    # =======================
-    # Regresión LOGÍSTICA comparada
-    # =======================
-    if logit_Y and len(logit_Xs) >= 1:
-        st.subheader(f"Regresión logística — Y: {logit_Y} ~ X: {', '.join(logit_Xs)}")
-        # parámetros de comparación coherentes
-        test_size = st.slider("Tamaño de prueba", 0.1, 0.5, 0.30, 0.05, key="cmp_test")
-        imb_method = st.selectbox("Manejo de desbalance", ["Ninguno","class_weight='balanced'","SMOTE","Under"], key="cmp_imb")
-        thr_mode = st.selectbox("Estrategia de umbral", ["F1 óptimo","Manual"], key="cmp_thr")
-        thr_manual = st.slider("Umbral manual", 0.05, 0.95, 0.5, 0.01, key="cmp_thr_val") if thr_mode=="Manual" else None
-
-        def run_logit(dfx):
-            # prepara
-            X = dfx[logit_Xs].astype(float).values
-            y_raw = dfx[logit_Y]
-            clases = y_raw.dropna().unique().tolist()
-            if len(clases) != 2: return None
-            # map 0/1 respetando orden
-            mapping = {clases[0]:0, clases[1]:1}
-            y = y_raw.map(mapping).values
-
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, stratify=y, random_state=42)
-            sc = StandardScaler()
-            X_train = sc.fit_transform(X_train); X_test = sc.transform(X_test)
-
-            # re-muestreo
-            if imb_method == "SMOTE":
-                sm = SMOTE(random_state=42)
-                X_train, y_train = sm.fit_resample(X_train, y_train)
-            elif imb_method == "Under":
-                rus = RandomUnderSampler(random_state=42)
-                X_train, y_train = rus.fit_resample(X_train, y_train)
-
-            # modelo
-            clf = LogisticRegression(max_iter=1000, class_weight=('balanced' if imb_method=="class_weight='balanced'" else None))
-            clf.fit(X_train, y_train)
-            proba = clf.predict_proba(X_test)[:,1]
-
-            # umbral
-            if thr_mode == "F1 óptimo":
-                p,r,th = precision_recall_curve(y_test, proba)
-                f1 = 2*(p*r)/np.clip(p+r,1e-12,None)
-                best = np.nanargmax(f1[:-1])
-                thr = th[best]
-            else:
-                thr = thr_manual
-
-            pred = (proba >= thr).astype(int)
-
-            # métricas
-            return {
-                "thr": thr,
-                "acc": accuracy_score(y_test, pred),
-                "bacc": balanced_accuracy_score(y_test, pred),
-                "f1_1": f1_score(y_test, pred, pos_label=1, zero_division=0),
-                "auc": roc_auc_score(y_test, proba),
-                "ap": average_precision_score(y_test, proba),  # AUPRC
-                "coef": clf.coef_[0],
-                "inter": clf.intercept_[0],
-                "map": mapping
-            }
-
-        rows = []
-        coefs = []
-        for c in COUNTRY_FILES:
-            d,_ = load_country_df(c)
-            # filtra NaN en columnas usadas
-            need_cols = [logit_Y] + logit_Xs
-            d2 = d.dropna(subset=[col for col in need_cols if col in d.columns])
-            if len(d2) < 50:
-                rows.append({"País":c, "Balanced Acc":np.nan, "AUC":np.nan, "AUPRC":np.nan, "F1(1)":np.nan, "Umbral":np.nan})
-                continue
-            out = run_logit(d2)
-            if out is None:
-                rows.append({"País":c, "Balanced Acc":np.nan, "AUC":np.nan, "AUPRC":np.nan, "F1(1)":np.nan, "Umbral":np.nan})
-                continue
-            rows.append({"País":c, "Balanced Acc":out["bacc"], "AUC":out["auc"], "AUPRC":out["ap"], "F1(1)":out["f1_1"], "Umbral":out["thr"]})
-            # tabla de coeficientes (para comparar señales)
-            coefs.append(pd.DataFrame({
-                "País": c,
-                "Variable": ["Intercepto"] + logit_Xs,
-                "Coef (log-odds)": [out["inter"]] + list(out["coef"]),
-                "Odds Ratio": [np.exp(out["inter"])] + list(np.exp(out["coef"]))
-            }))
-
-        met_cmp = pd.DataFrame(rows)
-        st.subheader("Métricas por país (Logística)")
-        st.dataframe(met_cmp, use_container_width=True)
-
-        try:
-            g1 = px.bar(met_cmp, x="País", y="Balanced Acc", title="Balanced Accuracy por país")
-            g2 = px.bar(met_cmp, x="País", y="AUPRC", title="AUPRC por país")
-            st.plotly_chart(g1, use_container_width=True)
-            st.plotly_chart(g2, use_container_width=True)
-        except Exception:
-            pass
-
-        if coefs:
-            coefs_cmp = pd.concat(coefs, ignore_index=True)
-            st.subheader("Coeficientes comparados (Logística)")
-            st.dataframe(coefs_cmp, use_container_width=True)
-
-
-
-##########################################################################################
-# FOOTER / DISCLAIMER
+# FOOTER
 st.markdown("---")
-st.markdown(
-    """
-    <div class="air-footer">
-    © Proyecto para Gestión de proyectos. Este dashboard no
-    está afiliado ni respaldado oficialmente por Airbnb. Por Raymundo Díaz con ayuda de IA y profe Freddy.  
-    Construido con Streamlit, Plotly y Python.
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("""
+<div style="text-align:center; opacity:0.8; font-size:0.9rem;">
+© Proyecto para Gestión de Proyectos — Dashboard creado por <b>Raymundo Díaz</b> con ayuda de IA y profe Freddy.  
+<br> Construido con Streamlit, Plotly y Python.
+</div>
+""", unsafe_allow_html=True)
