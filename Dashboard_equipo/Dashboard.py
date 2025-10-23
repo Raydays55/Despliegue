@@ -109,14 +109,12 @@ px.defaults.height = 420
 
 
 ##########
-# Carga de datos
-@st.cache_resource
 # Multi-país: rutas y normalización
 COUNTRY_FILES = {
     "Alemania":  "Berlin_Final.csv",
     "Valencia":    "Valencia_Final.csv",
     "Estocolmo":   "Estocolmo_Final.csv",
-    "México":    "Mexico_Final.csv",
+    "Mexico":    "Mexico_Final.csv",
 }
 
 # Galería por país (ajusta rutas reales)
@@ -124,7 +122,7 @@ COUNTRY_IMAGES = {
     "Alemania": ["assets/Berlin1.jpg", "assets/Berlin3.jpg", "assets/Berlin2.jpg"],
     "Valencia":   ["assets/Valencia1.jpg",  "assets/Valencia2.jpg",  "assets/Valencia3.jpg"],
     "Estocolmo":  ["assets/Estocolmo1.jpg", "assets/Estocolmo2.jpg", "assets/Estocolmo3.jpg"],
-    "México":   ["assets/Mexico1.jpg",  "assets/Mexico2.jpg",  "assets/Mexico3.jpg"],
+    "Mexico":   ["assets/Mexico1.jpg",  "assets/Mexico2.jpg",  "assets/Mexico3.jpg"],
 }
 
 BIN_TRUE = {"t","true","True",1,"1",True}
@@ -175,7 +173,7 @@ def load_country_df(country: str):
 
 
 # Carga de datos función 'load_data()'
-df, Lista = load_data()
+df, Lista = load_country_df()
 
 ##########
 # HERO HEADER (branding + KPIs)
